@@ -1,0 +1,56 @@
+# Render Blueprint - Hybrid QR-Code Based Attendance & Financial Management System.
+#
+#   Render dashboard -> New -> Blueprint -> pick this repo.
+#
+# One Docker web service built from backend/Dockerfile. Static files are served
+# by the app (WhiteNoise); images live on Cloudinary; the database is a Render
+# PostgreSQL (use its *Internal* URL). Values marked `sync: false` are prompted
+# for in the dashboard and are never stored in git.
+# Full guide: backend/DEPLOYMENT.md ("Deploy on Render").
+
+services:
+  - type: web
+    name: cdk-ite-attendance
+    runtime: docker
+    # Paths are relative to the repository root.
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    region: singapore          # keep in the same region as the PostgreSQL (Internal URL)
+    plan: free                 # use "starter" or higher on defense day (free instances sleep)
+    healthCheckPath: /healthz/
+    autoDeploy: true
+    envVars:
+      # ---- Django ----
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: USE_HTTPS
+        value: "True"
+      - key: NUM_PROXIES        # Render's load balancer = 1 proxy (use 2 if a CDN is in front)
+        value: "1"
+      - key: WEB_CONCURRENCY    # Gunicorn workers: keep small on small instances
+        value: "2"
+      # RENDER_EXTERNAL_HOSTNAME is injected by Render and is allowed/trusted automatically.
+
+      # ---- Database ----
+      - key: DATABASE_URL       # Render PostgreSQL -> Internal Database URL
+        sync: false
+
+      # ---- First-run Department Adviser (created once; never overwritten) ----
+      - key: ADMIN_USERNAME
+        value: adviser
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+      # ---- Images: profile photos, QR PNGs, portal logo ----
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_FOLDER
+        value: ite-attendance

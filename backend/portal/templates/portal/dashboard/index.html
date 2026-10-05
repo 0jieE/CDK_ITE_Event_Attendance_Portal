@@ -1,0 +1,147 @@
+{% extends "portal/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <div>
+      <h2 class="page-title">Overview</h2>
+      <div class="page-sub">Fines and attendance across all events.</div>
+    </div>
+    <div class="page-actions no-print">
+      <a href="{% url 'portal:fines-list' %}" class="btn btn-outline-primary btn-sm"><i class="bi bi-cash-coin"></i> Fines</a>
+      <a href="{% url 'portal:reports-attendance' %}" class="btn btn-outline-primary btn-sm"><i class="bi bi-graph-up"></i> Reports</a>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card metric h-100">
+        <div class="card-body">
+          <span class="metric-icon"><i class="bi bi-receipt"></i></span>
+          <div class="min-w-0">
+            <div class="metric-label">Total fines issued</div>
+            <div class="metric-value">₱{{ data.total_fines_issued }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card metric h-100">
+        <div class="card-body">
+          <span class="metric-icon tone-success"><i class="bi bi-cash-stack"></i></span>
+          <div>
+            <div class="metric-label">Total collected</div>
+            <div class="metric-value text-success">₱{{ data.total_collected }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card metric h-100">
+        <div class="card-body">
+          <span class="metric-icon tone-danger"><i class="bi bi-hourglass-split"></i></span>
+          <div>
+            <div class="metric-label">Total outstanding</div>
+            <div class="metric-value" style="color:#c02636">₱{{ data.total_outstanding }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card metric h-100">
+        <div class="card-body">
+          <span class="metric-icon"><i class="bi bi-person-check"></i></span>
+          <div>
+            <div class="metric-label">Attendance rate</div>
+            <div class="metric-value">{{ data.overall_attendance_rate|floatformat:2 }}
+              <span class="fs-6 text-muted fw-medium">/ 1.0</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <!-- Per-event breakdown -->
+    <div class="col-12 col-xl-8">
+      <div class="card h-100">
+        <div class="card-header d-flex align-items-center gap-2"><i class="bi bi-calendar-event text-brand"></i> Per-event breakdown</div>
+        <div class="card-body pt-2">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>Event</th><th>Semester</th><th>Attendance</th>
+                  <th class="text-end">Collected</th><th class="text-end">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for e in data.events %}
+                  <tr>
+                    <td class="fw-semibold">{{ e.event_name }}</td>
+                    <td class="text-muted">{{ e.semester }}</td>
+                    <td>{{ e.attendance_rate|floatformat:2 }}</td>
+                    <td class="text-end text-success fw-semibold">₱{{ e.collected }}</td>
+                    <td class="text-end fw-semibold" style="color:#c02636">₱{{ e.outstanding }}</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="5" class="text-center text-muted py-5"><i class="bi bi-inbox fs-3 d-block mb-1"></i>No events yet.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="col-12 col-xl-4">
+      <div class="card h-100">
+        <div class="card-header d-flex align-items-center gap-2"><i class="bi bi-bar-chart text-brand"></i> Collected vs outstanding</div>
+        <div class="card-body">
+          <div style="position:relative;min-height:240px"><canvas id="finesChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+{{ chart_labels|json_script:"chartLabels" }}
+{{ chart_collected|json_script:"chartCollected" }}
+{{ chart_outstanding|json_script:"chartOutstanding" }}
+<script>
+  (function () {
+    const labels = JSON.parse(document.getElementById('chartLabels').textContent);
+    const collected = JSON.parse(document.getElementById('chartCollected').textContent);
+    const outstanding = JSON.parse(document.getElementById('chartOutstanding').textContent);
+    if (!labels.length) return;
+    const css = getComputedStyle(document.documentElement);
+    const brand = css.getPropertyValue('--brand').trim() || '#41b422';
+    const grid = css.getPropertyValue('--line').trim() || 'rgba(0,0,0,.08)';
+    const muted = css.getPropertyValue('--muted').trim() || '#64748b';
+    Chart.defaults.font.family = css.getPropertyValue('--bs-body-font-family').trim();
+    Chart.defaults.color = muted;
+    new Chart(document.getElementById('finesChart'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'Collected', data: collected, backgroundColor: brand, borderRadius: 8, maxBarThickness: 36 },
+          { label: 'Outstanding', data: outstanding, backgroundColor: '#e5586a', borderRadius: 8, maxBarThickness: 36 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } } },
+        scales: {
+          x: { stacked: false, grid: { display: false } },
+          y: { beginAtZero: true, grid: { color: grid }, border: { display: false } }
+        }
+      }
+    });
+  })();
+</script>
+{% endblock %}

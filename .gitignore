@@ -1,0 +1,14 @@
+# Local tooling / editor state
+.claude/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Secrets - only the *.example templates are tracked
+.env
+.env.*
+!.env.example
+!.env.prod.example
+*.pem
+*.key

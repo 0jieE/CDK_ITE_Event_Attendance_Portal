@@ -1,0 +1,113 @@
+{% extends "portal/base.html" %}
+{% block title %}Fines{% endblock %}
+{% block page_title %}Fines{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2 class="page-title">Fines</h2>
+    <div class="page-sub">Per missed required slot &middot; updates automatically.</div>
+  </div>
+  <div class="page-actions">
+    <div class="btn-group btn-group-sm no-print" role="group" aria-label="Fines view">
+      <a href="?view=event" class="btn {% if view == 'event' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        <i class="bi bi-list-ul"></i> By Event
+      </a>
+      <a href="?view=student" class="btn {% if view == 'student' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        <i class="bi bi-person-lines-fill"></i> By Student
+      </a>
+    </div>
+    <button class="btn btn-primary btn-sm no-print"
+            hx-get="{% url 'portal:fines-calculate' %}" hx-target="#modalContent" hx-swap="innerHTML">
+      <i class="bi bi-calculator"></i> Calculate Fines
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% if view == 'student' %}
+      {# ---- By Student: pick a student + event, see daily detail ---- #}
+      <form class="row g-2 mb-3 no-print"
+            hx-get="{% url 'portal:fines-list' %}"
+            hx-target="#fines-student-container" hx-swap="innerHTML"
+            hx-trigger="change delay:150ms, submit, refresh-fines from:body">
+        <input type="hidden" name="partial" value="table">
+        <input type="hidden" name="view" value="student">
+        <div class="col-12 col-md-5">
+          <label class="form-label small mb-1">Student <span class="text-danger">*</span></label>
+          <select name="student" class="form-select form-select-sm">
+            <option value="">— select student —</option>
+            {% for s in students %}
+              <option value="{{ s.id }}" {% if filters.student == s.id|stringformat:'s' %}selected{% endif %}>
+                {{ s.student_number }} — {{ s.user.get_full_name|default:s.user.username }}{% if s.year_section %} ({{ s.year_section }}){% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-5">
+          <label class="form-label small mb-1">Event <span class="text-danger">*</span></label>
+          <select name="event" class="form-select form-select-sm">
+            <option value="">— select event —</option>
+            {% for e in events %}
+              <option value="{{ e.id }}" {% if filters.event == e.id|stringformat:'s' %}selected{% endif %}>{{ e.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </form>
+      <div id="fines-student-container">
+        {% include "portal/fines/partials/by_student.html" %}
+      </div>
+
+    {% else %}
+      {# ---- By Event: the fines ledger ---- #}
+      <form class="row g-2 mb-3 no-print"
+            hx-get="{% url 'portal:fines-list' %}"
+            hx-target="#fines-table-container" hx-swap="innerHTML"
+            hx-trigger="change delay:150ms, submit, refresh-fines from:body">
+        <input type="hidden" name="partial" value="table">
+        <input type="hidden" name="view" value="event">
+        <div class="col-6 col-md-3">
+          <label class="form-label small mb-1">Event</label>
+          <select name="event" class="form-select form-select-sm">
+            <option value="">All events</option>
+            {% for e in events %}
+              <option value="{{ e.id }}" {% if filters.event == e.id|stringformat:'s' %}selected{% endif %}>{{ e.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label small mb-1">Status</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="">All</option>
+            {% for val, label in statuses %}
+              <option value="{{ val }}" {% if filters.status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label small mb-1">Year</label>
+          <select name="year_level" class="form-select form-select-sm">
+            <option value="">All years</option>
+            {% for val, label in year_levels %}
+              <option value="{{ val }}" {% if filters.year_level == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label small mb-1">Section</label>
+          <select name="section" class="form-select form-select-sm">
+            <option value="">All sections</option>
+            {% for sec in sections %}
+              <option value="{{ sec }}" {% if filters.section == sec %}selected{% endif %}>{{ sec }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </form>
+      <div id="fines-table-container">
+        {% include "portal/fines/partials/table.html" %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

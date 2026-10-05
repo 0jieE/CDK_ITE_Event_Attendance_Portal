@@ -1,0 +1,11 @@
+{% comment %}
+Round avatar: the user's photo, or initials when there is none.
+Usage: {% include "portal/partials/avatar.html" with u=obj.user size=36 %}
+{% endcomment %}
+{% with url=u.avatar_url %}
+  {% if url %}
+    <img class="av" style="--av:{{ size|default:36 }}px" src="{{ url }}" alt="" loading="lazy" width="{{ size|default:36 }}" height="{{ size|default:36 }}">
+  {% else %}
+    <span class="av" style="--av:{{ size|default:36 }}px" aria-hidden="true">{{ u.initials }}</span>
+  {% endif %}
+{% endwith %}

@@ -1,0 +1,29 @@
+{% comment %}
+Section header (title + Add button) and the HTMX-refreshable table container.
+The container reloads its table fragment whenever a create/update/delete fires
+the section's `refresh_event`.
+{% endcomment %}
+<div class="page-head">
+  <div>
+    <h2 class="page-title">{{ title }}</h2>
+  </div>
+  {% if add_url %}
+    <div class="page-actions">
+      <button class="btn btn-primary"
+              hx-get="{{ add_url }}" hx-target="#modalContent" hx-swap="innerHTML">
+        <i class="bi bi-plus-lg"></i> Add {{ singular }}
+      </button>
+    </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div id="{{ section }}-table-container"
+         hx-get="{{ list_url }}?partial=table"
+         hx-trigger="{{ refresh_event }} from:body"
+         hx-target="this" hx-swap="innerHTML">
+      {% include table_template %}
+    </div>
+  </div>
+</div>

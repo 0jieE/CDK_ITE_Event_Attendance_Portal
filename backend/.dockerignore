@@ -1,0 +1,23 @@
+# Never bake virtualenvs, secrets, local data or VCS into the image.
+env/
+env_64/
+venv/
+.venv/
+.env
+.env.*
+!.env.example
+!.env.prod.example
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+__pycache__/
+*.py[cod]
+*.log
+.git/
+.idea/
+.vscode/
+nginx/certs/
+docker-compose*.yml
+Dockerfile
+*.md

@@ -1,0 +1,22 @@
+{% comment %} Calculate-fines modal body (swapped into #modalContent). {% endcomment %}
+<div class="modal-header">
+  <h5 class="modal-title"><i class="bi bi-calculator"></i> Calculate Fines</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<form hx-post="{% url 'portal:fines-calculate' %}" hx-target="#modalContent" hx-swap="innerHTML">
+  {% csrf_token %}
+  <div class="modal-body">
+    <div class="alert alert-info small py-2 mb-3">
+      Fine = each student's <strong>missed required slots &times; the event's fine rate</strong>.
+      A slot counts only after its scan window has ended; already-paid fines are never
+      overwritten. Fines also refresh automatically whenever they are viewed.
+    </div>
+    {% include "portal/partials/form_fields.html" with single_col=True %}
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+    <button type="submit" class="btn btn-primary">
+      <span class="htmx-indicator spinner-border spinner-border-sm"></span> Run Calculation
+    </button>
+  </div>
+</form>

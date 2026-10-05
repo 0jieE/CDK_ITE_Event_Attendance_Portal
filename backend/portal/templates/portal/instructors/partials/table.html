@@ -1,0 +1,46 @@
+{% comment %} Instructors table fragment. {% endcomment %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle datatable" id="instructorsTable" width="100%">
+    <thead>
+      <tr>
+        <th>Username</th><th>Full Name</th><th>Email</th><th>Role</th>
+        <th>Active</th><th class="text-end no-print">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for obj in objects %}
+        <tr>
+          <td>{{ obj.user.username }}</td>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              {% include "portal/partials/avatar.html" with u=obj.user size=34 %}
+              <span>{{ obj.user.get_full_name|default:"—" }}</span>
+            </div>
+          </td>
+          <td>{{ obj.user.email|default:"—" }}</td>
+          <td><span class="badge text-bg-light border">Instructor</span></td>
+          <td>
+            {% if obj.user.is_active %}<span class="badge text-bg-success">Active</span>
+            {% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}
+          </td>
+          <td class="text-end no-print">
+            {% if can_edit %}
+              <button class="btn btn-sm btn-outline-primary" title="Edit"
+                      hx-get="{% url edit_urlname obj.id %}" hx-target="#modalContent" hx-swap="innerHTML">
+                <i class="bi bi-pencil"></i>
+              </button>
+            {% endif %}
+            {% if can_delete %}
+              <button class="btn btn-sm btn-outline-danger" title="Delete"
+                      hx-post="{% url delete_urlname obj.id %}"
+                      hx-confirm="Delete instructor “{{ obj.user.get_full_name|default:obj.user.username }}”? This removes the linked user account."
+                      hx-swap="none">
+                <i class="bi bi-trash"></i>
+              </button>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

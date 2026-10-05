@@ -1,0 +1,44 @@
+{% comment %} Fines table fragment. {% endcomment %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle datatable" id="finesTable" width="100%">
+    <thead>
+      <tr>
+        <th>Student</th><th>Year &amp; Sec</th><th>Event</th><th>Missed</th><th>Amount</th>
+        <th>Status</th><th>Recorded By</th><th class="text-end no-print">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in objects %}
+        <tr>
+          <td>{{ f.student.student_number }} — {{ f.student.user.get_full_name|default:f.student.user.username }}</td>
+          <td>{{ f.student.year_section|default:"—" }}</td>
+          <td>{{ f.event.name }}</td>
+          <td>{{ f.missed_slots }}</td>
+          <td>₱{{ f.amount }}</td>
+          <td>
+            {% if f.status == 'PAID' %}
+              <span class="badge text-bg-success">Paid</span>
+              {% if f.paid_at %}<div class="small text-muted">{{ f.paid_at|date:"M d, Y" }}</div>{% endif %}
+            {% else %}
+              <span class="badge text-bg-danger">Unpaid</span>
+            {% endif %}
+            {% if f.needs_review %}<span class="badge text-bg-warning" title="A recompute disagreed with this paid fine">Review</span>{% endif %}
+          </td>
+          <td>{{ f.recorded_by|default:"—" }}</td>
+          <td class="text-end no-print">
+            {% if f.status != 'PAID' %}
+              <button class="btn btn-sm btn-success"
+                      hx-post="{% url 'portal:fines-mark-paid' f.id %}"
+                      hx-confirm="Mark this fine as PAID (cash turned over to the treasurer)?"
+                      hx-swap="none">
+                <i class="bi bi-cash-coin"></i> Mark Paid
+              </button>
+            {% else %}
+              <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

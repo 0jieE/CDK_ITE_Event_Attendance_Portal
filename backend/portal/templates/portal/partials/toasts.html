@@ -1,0 +1,22 @@
+{% comment %}
+Toast container. Server-side Django messages are rendered immediately on full
+page loads; HTMX responses fire client-side toasts via the showToast event.
+{% endcomment %}
+<div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer">
+  {% for message in messages %}
+    <div class="toast align-items-center border-0 {% if message.tags == 'error' %}text-bg-danger{% elif message.tags == 'success' %}text-bg-success{% elif message.tags == 'warning' %}text-bg-warning{% elif message.tags == 'info' %}text-bg-secondary{% else %}text-bg-secondary{% endif %}"
+         role="alert" data-bs-delay="4000">
+      <div class="d-flex">
+        <div class="toast-body">{{ message }}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('#toastContainer .toast').forEach(function (el) {
+      new bootstrap.Toast(el).show();
+    });
+  });
+</script>

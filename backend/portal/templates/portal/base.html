@@ -1,0 +1,347 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="{{ ui.mode }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="{{ ui.primary }}">
+  <title>{% block title %}Admin Portal{% endblock %} · ITE Attendance</title>
+
+  <script>
+    /* Apply the saved sidebar state before first paint (no layout flash).
+       Desktop: "collapsed" = icon rail. Mobile uses an off-canvas drawer instead. */
+    (function () {
+      var state = null;
+      try { state = localStorage.getItem('portal.sidebar'); } catch (e) {}
+      var collapsed = state ? state === 'collapsed' : {{ ui.compact|yesno:"true,false" }};
+      if (collapsed) document.documentElement.setAttribute('data-sidebar', 'collapsed');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Bootstrap 5 + Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <!-- DataTables (Bootstrap 5 theme) -->
+  <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+
+  {% include "portal/partials/style_theme.html" %}
+
+  <style>
+    :root { --sidebar-full: 264px; --rail-w: 76px; --sidebar-w: var(--sidebar-full); --topbar-h: 62px; }
+    html[data-sidebar="collapsed"] { --sidebar-w: var(--rail-w); }
+
+    /* ================= Sidebar ================= */
+    .sidebar {
+      position: fixed; inset: 0 auto 0 0; z-index: 1040;
+      width: var(--sidebar-w);
+      display: flex; flex-direction: column;
+      background: linear-gradient(180deg, var(--sidebar) 0%, var(--sidebar-end) 100%);
+      color: #c3d3c6;
+      overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+      transition: width .2s ease, transform .25s ease;
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.2) transparent;
+    }
+    .sidebar .brand {
+      display: flex; align-items: center; gap: .75rem;
+      padding: 1rem 1.1rem; min-height: var(--topbar-h);
+      color: #fff; font-weight: 700; letter-spacing: -.01em; line-height: 1.2;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .sidebar .brand img { width: 40px; height: 40px; flex: 0 0 auto; object-fit: contain; border-radius: 50%; background: #fff; padding: 2px; box-shadow: 0 0 0 2px rgba(var(--brand-rgb), .55); }
+    .sidebar .brand small { display: block; font-weight: 500; font-size: .7rem; color: rgba(255,255,255,.6); letter-spacing: 0; margin-top: .1rem; }
+    .sidebar .brand-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar .nav { padding: .75rem .5rem 1rem; gap: .15rem; flex-wrap: nowrap; }
+    .sidebar .nav-link {
+      display: flex; align-items: center; gap: .75rem;
+      color: #c3d3c6; border-radius: .75rem; padding: .62rem .85rem; font-weight: 500; font-size: .92rem;
+      white-space: nowrap; position: relative; transition: background-color .15s, color .15s;
+    }
+    .sidebar .nav-link > span:first-child { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+    .sidebar .nav-link i.bi { font-size: 1.12rem; width: 1.3rem; text-align: center; flex: 0 0 auto; }
+    .sidebar .nav-link:hover { background: rgba(255,255,255,.07); color: #fff; }
+    .sidebar .nav-link.active { background: var(--brand); color: var(--on-brand); font-weight: 700; box-shadow: 0 8px 20px -10px rgba(var(--brand-rgb), .9); }
+    .sidebar .nav-link.open { color: #fff; background: rgba(255,255,255,.06); }
+    .sidebar .nav-link.disabled { opacity: .45; pointer-events: none; }
+    .sidebar .nav-link .bi-chevron-down { font-size: .72rem; width: auto; transition: transform .18s ease; margin-left: auto; }
+    .sidebar .nav-link[aria-expanded="true"] .bi-chevron-down { transform: rotate(180deg); }
+    .sidebar .collapse .nav, .sidebar .collapsing .nav, .sidebar .collapse > .nav { padding: .15rem 0 .35rem; }
+    .sidebar .collapse .nav-link, .sidebar .collapsing .nav-link { font-size: .87rem; padding: .5rem .85rem; }
+    .sidebar .nav .nav { margin-left: 1.45rem; padding-left: .6rem; border-left: 1px solid rgba(255,255,255,.12); }
+    .sidebar-foot { margin-top: auto; padding: .85rem 1.1rem 1rem; font-size: .72rem; color: rgba(255,255,255,.45); border-top: 1px solid rgba(255,255,255,.07); white-space: nowrap; overflow: hidden; }
+
+    /* ================= Content ================= */
+    .content { margin-left: var(--sidebar-w); min-height: 100vh; min-width: 0; transition: margin-left .2s ease; }
+    .topbar {
+      position: sticky; top: 0; z-index: 1020; height: var(--topbar-h);
+      display: flex; align-items: center; gap: .75rem; padding: 0 1.25rem;
+      background: color-mix(in srgb, var(--app-surface) 86%, transparent);
+      -webkit-backdrop-filter: saturate(1.4) blur(10px); backdrop-filter: saturate(1.4) blur(10px);
+      border-bottom: 1px solid var(--line);
+    }
+    .topbar .page-name { font-weight: 700; font-size: 1.05rem; letter-spacing: -.01em; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .topbar .user-chip { display: inline-flex; align-items: center; gap: .55rem; padding: .25rem .65rem .25rem .3rem; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink); font-weight: 600; font-size: .86rem; }
+    .topbar .user-chip:hover, .topbar .user-chip:focus { background: rgba(var(--brand-rgb), .08); color: var(--ink); }
+    .avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: var(--brand); color: var(--on-brand); font-weight: 700; font-size: .8rem; text-transform: uppercase; }
+    .portal-main { padding: 1.5rem; max-width: 1600px; }
+    .sidebar-backdrop { display: none; }
+
+    /* ---- Desktop: collapsible icon rail ---- */
+    @media (min-width: 992px) {
+      html[data-sidebar="collapsed"] .sidebar .brand { justify-content: center; padding-inline: 0; }
+      html[data-sidebar="collapsed"] .sidebar .brand-text,
+      html[data-sidebar="collapsed"] .sidebar .nav-text,
+      html[data-sidebar="collapsed"] .sidebar .bi-chevron-down,
+      html[data-sidebar="collapsed"] .sidebar-foot { display: none; }
+      html[data-sidebar="collapsed"] .sidebar .nav { padding-inline: .6rem; }
+      html[data-sidebar="collapsed"] .sidebar .nav-link { justify-content: center; padding-inline: 0; }
+      html[data-sidebar="collapsed"] .sidebar .nav-link > span:first-child { gap: 0; }
+      html[data-sidebar="collapsed"] .sidebar .collapse,
+      html[data-sidebar="collapsed"] .sidebar .collapsing { display: none !important; }
+    }
+
+    /* ---- Mobile / tablet: off-canvas drawer ---- */
+    @media (max-width: 991.98px) {
+      .sidebar { width: min(var(--sidebar-full), 86vw); transform: translateX(-102%); box-shadow: none; }
+      html[data-sidebar-open] .sidebar { transform: none; box-shadow: 0 0 60px rgba(0,0,0,.45); }
+      .content { margin-left: 0; }
+      .topbar { padding: 0 .9rem; }
+      .portal-main { padding: 1rem .9rem 2rem; }
+      .sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 1035; background: rgba(6, 18, 10, .55); opacity: 0; visibility: hidden; transition: opacity .25s ease, visibility .25s; }
+      html[data-sidebar-open] .sidebar-backdrop { opacity: 1; visibility: visible; }
+      html[data-sidebar-open] body { overflow: hidden; }
+    }
+
+    @media print {
+      .sidebar, .topbar, .no-print, .sidebar-backdrop { display: none !important; }
+      .content { margin-left: 0 !important; }
+      .portal-main { padding: 0; max-width: none; }
+      .card { box-shadow: none; border: 0; }
+      a[href]:after { content: ""; }
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+
+  <!-- Sidebar -->
+  <nav class="sidebar no-print" id="sidebar" aria-label="Main navigation">
+    <div class="brand">
+      <img src="{% if ui.logo_url %}{{ ui.logo_url }}{% else %}{% static 'portal/img/ite-logo.png' %}{% endif %}" alt="Logo">
+      <span class="brand-text">
+        {{ ui.brand_title }}
+        <small>{{ ui.brand_subtitle }}</small>
+      </span>
+    </div>
+    <ul class="nav nav-pills flex-column">
+      {% for item in nav_items %}
+        {% if item.children %}
+          <li class="nav-item">
+            <a class="nav-link {% if active in item.child_keys %}open{% endif %}"
+               data-bs-toggle="collapse" href="#nav-{{ item.key }}" role="button" title="{{ item.label }}"
+               aria-expanded="{% if active in item.child_keys %}true{% else %}false{% endif %}">
+              <span><i class="bi bi-{{ item.icon }}"></i> <span class="nav-text">{{ item.label }}</span></span>
+              <i class="bi bi-chevron-down"></i>
+            </a>
+            <div class="collapse {% if active in item.child_keys %}show{% endif %}" id="nav-{{ item.key }}">
+              <ul class="nav flex-column">
+                {% for child in item.children %}
+                  <li class="nav-item">
+                    {% if child.url %}
+                      <a class="nav-link {% if active == child.key %}active{% endif %}" href="{{ child.url }}" title="{{ child.label }}">
+                        <i class="bi bi-{{ child.icon }}"></i> <span class="nav-text">{{ child.label }}</span>
+                      </a>
+                    {% else %}
+                      <span class="nav-link disabled"><i class="bi bi-{{ child.icon }}"></i> <span class="nav-text">{{ child.label }}</span></span>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          </li>
+        {% else %}
+          <li class="nav-item">
+            {% if item.url %}
+              <a class="nav-link {% if active == item.key %}active{% endif %}" href="{{ item.url }}" title="{{ item.label }}">
+                <i class="bi bi-{{ item.icon }}"></i> <span class="nav-text">{{ item.label }}</span>
+              </a>
+            {% else %}
+              <span class="nav-link disabled"><i class="bi bi-{{ item.icon }}"></i> <span class="nav-text">{{ item.label }}</span></span>
+            {% endif %}
+          </li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+    <div class="sidebar-foot">Colegio de Kidapawan · ITE</div>
+  </nav>
+  <div class="sidebar-backdrop no-print" id="sidebarBackdrop" aria-hidden="true"></div>
+
+  <!-- Main -->
+  <div class="content">
+    <header class="topbar no-print">
+      <button type="button" class="btn btn-light btn-icon flex-shrink-0" id="sidebarToggle"
+              aria-label="Toggle navigation" aria-controls="sidebar" aria-expanded="true" title="Toggle sidebar">
+        <i class="bi bi-list"></i>
+      </button>
+      <h1 class="page-name">{% block page_title %}{{ title|default:"Dashboard" }}{% endblock %}</h1>
+      <div class="dropdown ms-auto">
+        <a class="user-chip dropdown-toggle" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">
+          {% with photo=request.user.avatar_url %}
+            {% if photo %}<img class="avatar" src="{{ photo }}" alt="" width="30" height="30">
+            {% else %}<span class="avatar">{{ request.user.initials|slice:":1" }}</span>{% endif %}
+          {% endwith %}
+          <span class="d-none d-sm-inline">{{ request.user.get_full_name|default:request.user.username }}</span>
+        </a>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><span class="dropdown-item-text small text-muted">Signed in as <strong class="text-body">{{ request.user.username }}</strong><br>Department Adviser</span></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="{% url 'portal:settings' %}"><i class="bi bi-gear me-2"></i>Settings</a></li>
+          <li><a class="dropdown-item" href="{% url 'portal:logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="portal-main">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <!-- Toasts -->
+  {% include "portal/partials/toasts.html" %}
+
+  <!-- Shared modal shell (form partials are swapped into #modalContent) -->
+  <div class="modal fade" id="appModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down" id="modalDialog">
+      <div class="modal-content" id="modalContent"></div>
+    </div>
+  </div>
+
+  <!-- jQuery (DataTables dep) + Bootstrap + HTMX + DataTables + Chart.js -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <script>
+    // ---------------------------------------------------------------------
+    // Sidebar: icon-rail toggle on desktop, off-canvas drawer on mobile.
+    // ---------------------------------------------------------------------
+    (function () {
+      var root = document.documentElement;
+      var toggle = document.getElementById('sidebarToggle');
+      var backdrop = document.getElementById('sidebarBackdrop');
+      var sidebar = document.getElementById('sidebar');
+      var desktop = window.matchMedia('(min-width: 992px)');
+
+      function save(v) { try { localStorage.setItem('portal.sidebar', v); } catch (e) {} }
+      function isCollapsed() { return root.getAttribute('data-sidebar') === 'collapsed'; }
+      function isOpen() { return root.hasAttribute('data-sidebar-open'); }
+      function sync() {
+        // "expanded" = visible full sidebar (desktop: not collapsed; mobile: drawer open)
+        var expanded = desktop.matches ? !isCollapsed() : isOpen();
+        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      }
+      function setCollapsed(c) {
+        if (c) root.setAttribute('data-sidebar', 'collapsed'); else root.removeAttribute('data-sidebar');
+        save(c ? 'collapsed' : 'expanded'); sync();
+      }
+      function setOpen(o) {
+        if (o) root.setAttribute('data-sidebar-open', ''); else root.removeAttribute('data-sidebar-open');
+        sync();
+      }
+
+      toggle.addEventListener('click', function () {
+        if (desktop.matches) setCollapsed(!isCollapsed()); else setOpen(!isOpen());
+      });
+      backdrop.addEventListener('click', function () { setOpen(false); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && isOpen()) setOpen(false); });
+      // Leaving a page via a nav link: close the drawer first (also for bfcache restores).
+      sidebar.addEventListener('click', function (e) {
+        var a = e.target.closest('a[href]');
+        if (!a) return;
+        if (!desktop.matches && a.getAttribute('data-bs-toggle') !== 'collapse') setOpen(false);
+        // In the icon rail a group header can't show its children: widen the rail instead.
+        if (desktop.matches && isCollapsed() && a.getAttribute('data-bs-toggle') === 'collapse') setCollapsed(false);
+      });
+      desktop.addEventListener('change', function () { setOpen(false); sync(); });
+      window.addEventListener('pageshow', function () { setOpen(false); });
+      sync();
+    })();
+
+    // Bootstrap modal instance for HTMX-loaded forms.
+    const appModal = new bootstrap.Modal(document.getElementById('appModal'));
+
+    // (Re)initialise DataTables on any .datatable inside a node.
+    function initDataTables(scope) {
+      (scope || document).querySelectorAll('table.datatable').forEach(function (tbl) {
+        if (!$.fn.dataTable.isDataTable(tbl)) {
+          $(tbl).DataTable({
+            pageLength: 10,
+            lengthMenu: [10, 25, 50, 100],
+            order: [],
+            autoWidth: false,
+            language: {
+              search: "", searchPlaceholder: "Search…",
+              lengthMenu: "Show _MENU_",
+              emptyTable: "No records found.",
+              zeroRecords: "No matching records found."
+            }
+          });
+        }
+      });
+    }
+    // Destroy DataTables before HTMX replaces their DOM (avoid reinit errors).
+    function destroyDataTables(scope) {
+      (scope || document).querySelectorAll('table.datatable').forEach(function (tbl) {
+        if ($.fn.dataTable.isDataTable(tbl)) { $(tbl).DataTable().destroy(); }
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () { initDataTables(document); });
+
+    document.body.addEventListener('htmx:beforeSwap', function (e) {
+      destroyDataTables(e.detail.target);
+    });
+    document.body.addEventListener('htmx:afterSwap', function (e) {
+      // Show the modal when a form partial lands in it (wide dialog for long forms).
+      if (e.detail.target && e.detail.target.id === 'modalContent') {
+        var wide = e.detail.target.querySelector('[data-modal-size="lg"]');
+        document.getElementById('modalDialog').classList.toggle('modal-lg', !!wide);
+        appModal.show();
+      }
+      initDataTables(e.detail.target);
+    });
+
+    // HX-Trigger: closeModal
+    document.body.addEventListener('closeModal', function () { appModal.hide(); });
+
+    // HX-Trigger: showToast {message, level}
+    document.body.addEventListener('showToast', function (e) {
+      const d = e.detail || {};
+      showToast(d.message || 'Done', d.level || 'success');
+    });
+
+    function showToast(message, level) {
+      const map = { success:'text-bg-success', error:'text-bg-danger',
+                    danger:'text-bg-danger', warning:'text-bg-warning', info:'text-bg-secondary' };
+      const cls = map[level] || 'text-bg-secondary';
+      const wrap = document.getElementById('toastContainer');
+      const el = document.createElement('div');
+      el.className = 'toast align-items-center border-0 ' + cls;
+      el.setAttribute('role', 'alert');
+      el.innerHTML =
+        '<div class="d-flex"><div class="toast-body">' + message +
+        '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+      wrap.appendChild(el);
+      const t = new bootstrap.Toast(el, { delay: 4000 });
+      t.show();
+      el.addEventListener('hidden.bs.toast', function () { el.remove(); });
+    }
+  </script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

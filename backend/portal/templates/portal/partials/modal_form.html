@@ -1,0 +1,24 @@
+{% comment %}
+Generic modal form body, swapped into #modalContent.  Works for any ModelForm:
+field rendering is delegated to form_fields.html.  On submit it posts to
+`post_url`; the server returns 204 + HX-Trigger (toast/refresh/closeModal) on
+success, or re-renders this partial (422) with errors on failure.
+{% endcomment %}
+<div class="modal-header">
+  <h5 class="modal-title">{{ form_title }}</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<form hx-post="{{ post_url }}" hx-target="#modalContent" hx-swap="innerHTML" hx-encoding="multipart/form-data"
+      {% if form.fields|length > 4 %}data-modal-size="lg"{% endif %}
+      class="d-flex flex-column overflow-hidden">
+  {% csrf_token %}
+  <div class="modal-body overflow-auto">
+    {% include "portal/partials/form_fields.html" %}
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+    <button type="submit" class="btn btn-primary">
+      <span class="htmx-indicator spinner-border spinner-border-sm"></span> <i class="bi bi-check-lg"></i> Save
+    </button>
+  </div>
+</form>

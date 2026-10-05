@@ -1,0 +1,44 @@
+{% comment %}
+Shared report filter bar. Caller passes `action_url` (the report endpoint).
+Submits as a normal GET (full page) so the printable table reflects filters;
+"Download CSV" re-submits the same filters with format=csv.
+{% endcomment %}
+<form class="row g-2 mb-3 align-items-end no-print" method="get" action="{{ action_url }}">
+  <div class="col-12 col-md-3">
+    <label class="form-label small mb-1">Semester</label>
+    <select name="semester" class="form-select form-select-sm">
+      <option value="">All semesters</option>
+      {% for s in semesters %}
+        <option value="{{ s.id }}" {% if filters.semester == s.id|stringformat:'s' %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12 col-md-3">
+    <label class="form-label small mb-1">Event</label>
+    <select name="event" class="form-select form-select-sm">
+      <option value="">All events</option>
+      {% for e in events %}
+        <option value="{{ e.id }}" {% if filters.event == e.id|stringformat:'s' %}selected{% endif %}>{{ e.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-6 col-md-2">
+    <label class="form-label small mb-1">From</label>
+    <input type="date" name="date_from" value="{{ filters.date_from|default:'' }}" class="form-control form-control-sm">
+  </div>
+  <div class="col-6 col-md-2">
+    <label class="form-label small mb-1">To</label>
+    <input type="date" name="date_to" value="{{ filters.date_to|default:'' }}" class="form-control form-control-sm">
+  </div>
+  <div class="col-12 col-md-2 d-flex gap-1">
+    <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i> Apply</button>
+  </div>
+  <div class="col-12 mt-2 d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-secondary btn-sm" href="?{{ request.GET.urlencode }}&format=csv">
+      <i class="bi bi-filetype-csv"></i> Download CSV
+    </a>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+      <i class="bi bi-printer"></i> Print
+    </button>
+  </div>
+</form>

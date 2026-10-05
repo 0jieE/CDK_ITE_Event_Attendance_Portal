@@ -1,0 +1,49 @@
+{% extends "portal/base.html" %}
+{% block title %}Financial Report{% endblock %}
+{% block page_title %}Financial Report{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">Financial Report</h2>
+  <div class="btn-group btn-group-sm no-print" role="group" aria-label="Report type">
+    <a href="{% url 'portal:reports-attendance' %}" class="btn {% if report == 'attendance' %}btn-primary{% else %}btn-outline-primary{% endif %}">Attendance</a>
+    <a href="{% url 'portal:reports-financial' %}" class="btn {% if report == 'financial' %}btn-primary{% else %}btn-outline-primary{% endif %}">Financial</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% include "portal/reports/partials/filters.html" with action_url=request.path %}
+
+    <h5 class="d-none d-print-block">Financial Report</h5>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle">
+        <thead>
+          <tr>
+            <th>Event</th><th>Semester</th>
+            <th class="text-end">Fines</th><th class="text-end">Issued</th>
+            <th class="text-end">Collected</th><th class="text-end">Outstanding</th>
+            <th class="text-end">Paid</th><th class="text-end">Unpaid</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+            <tr>
+              <td>{{ r.event_name }}</td>
+              <td>{{ r.semester }}</td>
+              <td class="text-end">{{ r.fines_count }}</td>
+              <td class="text-end">₱{{ r.total_issued }}</td>
+              <td class="text-end text-success">₱{{ r.collected }}</td>
+              <td class="text-end text-danger">₱{{ r.outstanding }}</td>
+              <td class="text-end">{{ r.paid_count }}</td>
+              <td class="text-end">{{ r.unpaid_count }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="8" class="text-center text-muted py-4">No data for the selected filters.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

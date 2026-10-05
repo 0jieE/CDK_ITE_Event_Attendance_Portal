@@ -1,0 +1,50 @@
+{% extends "portal/base.html" %}
+{% block title %}Attendance Report{% endblock %}
+{% block page_title %}Attendance Report{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h2 class="page-title">Attendance Report</h2>
+  <div class="btn-group btn-group-sm no-print" role="group" aria-label="Report type">
+    <a href="{% url 'portal:reports-attendance' %}" class="btn {% if report == 'attendance' %}btn-primary{% else %}btn-outline-primary{% endif %}">Attendance</a>
+    <a href="{% url 'portal:reports-financial' %}" class="btn {% if report == 'financial' %}btn-primary{% else %}btn-outline-primary{% endif %}">Financial</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% include "portal/reports/partials/filters.html" with action_url=request.path %}
+
+    <h5 class="d-none d-print-block">Attendance Report</h5>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle">
+        <thead>
+          <tr>
+            <th>Event</th><th>Semester</th><th>Start</th><th>End</th>
+            <th class="text-end">Total</th><th class="text-end">Present</th>
+            <th class="text-end">Late</th><th class="text-end">Absent</th>
+            <th class="text-end">Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+            <tr>
+              <td>{{ r.event_name }}</td>
+              <td>{{ r.semester }}</td>
+              <td>{{ r.start_date|date:"M d, Y" }}</td>
+              <td>{{ r.end_date|date:"M d, Y" }}</td>
+              <td class="text-end">{{ r.total_logs }}</td>
+              <td class="text-end">{{ r.present }}</td>
+              <td class="text-end">{{ r.late }}</td>
+              <td class="text-end">{{ r.absent }}</td>
+              <td class="text-end">{{ r.attendance_rate|floatformat:2 }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="9" class="text-center text-muted py-4">No data for the selected filters.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

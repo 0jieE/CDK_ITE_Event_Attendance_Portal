@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtualenv
+env/
+venv/
+.venv/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+/staticfiles/
+/media/
+
+# Environment / secrets
+.env
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Production env files (keep only the *.example templates in version control)
+.env.*
+!.env.example
+!.env.prod.example
+env_64/
+
+# TLS material for nginx
+nginx/certs/*
+!nginx/certs/.gitkeep

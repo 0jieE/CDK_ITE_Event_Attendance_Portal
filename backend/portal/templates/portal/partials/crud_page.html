@@ -1,0 +1,10 @@
+{% extends "portal/base.html" %}
+{% comment %}
+Shared full-page shell for every CRUD section.  The view supplies the section
+metadata (title, urls, table_template); only the per-section table partial
+differs between sections.
+{% endcomment %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+  {% include "portal/partials/crud_list_block.html" %}
+{% endblock %}

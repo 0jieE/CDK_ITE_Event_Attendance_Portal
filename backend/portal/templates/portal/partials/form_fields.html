@@ -1,0 +1,99 @@
+{% comment %}
+Generic Bootstrap field renderer for any form.  Relies on BootstrapModelForm
+having applied the right control classes; only layout differs by widget type.
+
+Layout: a responsive grid. Forms with more than 4 fields use two columns from
+the `md` breakpoint up (one column on phones); small forms - or callers that
+pass `single_col=True` - stay one column. Wide widgets (checkbox groups, file
+and text areas) always span the full row.
+{% endcomment %}
+{% load portal_extras %}
+{% if form.non_field_errors %}
+  <div class="alert alert-danger py-2">
+    {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+  </div>
+{% endif %}
+
+<div class="row g-3">
+{% for field in form %}
+  {% if field.is_hidden %}
+    {{ field }}
+  {% else %}
+    {% if field.name == 'am_in_start' %}
+      <div class="col-12">
+        <div class="form-section"><i class="bi bi-clock"></i> Scan windows</div>
+        {% if field.help_text %}<div class="form-text mt-2">{{ field.help_text }}</div>{% endif %}
+      </div>
+    {% endif %}
+
+    {% if field.name == 'profile_image' %}
+      <div class="col-12">
+        <label class="form-label d-block" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        <div class="photo-field d-flex align-items-center gap-3">
+          {% with current=field.value|img_url:"medium" %}
+            {% if current %}
+              <img class="photo-preview" id="photoPreview" src="{{ current }}" alt="Current photo" width="72" height="72">
+            {% else %}
+              <span class="photo-preview" id="photoPreview"><i class="bi bi-person"></i></span>
+            {% endif %}
+            <div class="flex-grow-1 min-w-0">
+              <input type="file" name="{{ field.html_name }}" id="{{ field.id_for_label }}"
+                     class="form-control form-control-sm" accept="image/png,image/jpeg,image/webp"
+                     onchange="(function(i){var f=i.files[0],p=document.getElementById('photoPreview');if(!f)return;var u=URL.createObjectURL(f);if(p.tagName==='IMG'){p.src=u}else{var im=document.createElement('img');im.className='photo-preview';im.id='photoPreview';im.width=72;im.height=72;im.src=u;p.replaceWith(im)}})(this)">
+              {% if current %}
+                <div class="form-check mt-2">
+                  <input class="form-check-input" type="checkbox" name="{{ field.html_name }}-clear" id="{{ field.id_for_label }}-clear">
+                  <label class="form-check-label small" for="{{ field.id_for_label }}-clear">Remove current photo</label>
+                </div>
+              {% endif %}
+            </div>
+          {% endwith %}
+        </div>
+        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+        {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+      </div>
+
+    {% elif field.widget_type == 'checkbox' %}
+      <div class="col-12">
+        <div class="form-check form-switch d-flex align-items-center gap-2 ps-0">
+          <input type="checkbox" name="{{ field.html_name }}" id="{{ field.id_for_label }}"
+                 class="form-check-input ms-0 flex-shrink-0"{% if field.value %} checked{% endif %}>
+          <label class="form-check-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        </div>
+        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+        {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+      </div>
+
+    {% elif field.widget_type == 'checkboxselectmultiple' %}
+      <div class="col-12">
+        <label class="form-label d-block">{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</label>
+        {# One selectable card per option; several may be ticked at once. #}
+        <div class="checkbox-group row g-2" id="{{ field.id_for_label }}">
+          {% for opt in field %}
+            <div class="col-6 col-md-3">
+              <div class="form-check choice-card">
+                <input class="form-check-input" type="checkbox"
+                       name="{{ opt.data.name }}" value="{{ opt.data.value }}"
+                       id="{{ opt.id_for_label }}"{% if opt.data.selected %} checked{% endif %}>
+                <label class="form-check-label stretched-link" for="{{ opt.id_for_label }}">{{ opt.choice_label }}</label>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+        {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+      </div>
+
+    {% else %}
+      <div class="{% if single_col or form.fields|length <= 4 or field.widget_type == 'clearablefileinput' or field.widget_type == 'textarea' %}col-12{% else %}col-12 col-md-6{% endif %}">
+        <label class="form-label" for="{{ field.id_for_label }}">
+          {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+        </label>
+        {{ field }}
+        {% if field.help_text and field.name != 'am_in_start' %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+        {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+      </div>
+    {% endif %}
+  {% endif %}
+{% endfor %}
+</div>

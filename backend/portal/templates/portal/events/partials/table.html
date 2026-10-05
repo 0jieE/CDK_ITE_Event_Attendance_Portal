@@ -1,0 +1,55 @@
+{% comment %} Events table fragment (also returned on HTMX refresh). {% endcomment %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle datatable" id="eventsTable" width="100%">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Semester</th>
+        <th>Start</th>
+        <th>End</th>
+        <th>Fine Rate</th>
+        <th>Required Slots</th>
+        <th>Active</th>
+        <th class="text-end no-print">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for obj in objects %}
+        <tr id="event-row-{{ obj.id }}">
+          <td>{{ obj.name }}</td>
+          <td>{{ obj.semester }}</td>
+          <td data-order="{{ obj.start_date|date:'Y-m-d' }}">{{ obj.start_date|date:"M d, Y" }}</td>
+          <td data-order="{{ obj.end_date|date:'Y-m-d' }}">{{ obj.end_date|date:"M d, Y" }}</td>
+          <td>₱{{ obj.fine_rate }}</td>
+          <td>
+            {% for t in obj.required_types %}<span class="badge text-bg-light border me-1">{{ t }}</span>{% endfor %}
+          </td>
+          <td>
+            {% if obj.is_active %}
+              <span class="badge text-bg-success">Active</span>
+            {% else %}
+              <span class="badge text-bg-secondary">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="text-end no-print">
+            {% if can_edit %}
+              <button class="btn btn-sm btn-outline-primary"
+                      hx-get="{% url edit_urlname obj.id %}"
+                      hx-target="#modalContent" hx-swap="innerHTML" title="Edit">
+                <i class="bi bi-pencil"></i>
+              </button>
+            {% endif %}
+            {% if can_delete %}
+              <button class="btn btn-sm btn-outline-danger"
+                      hx-post="{% url delete_urlname obj.id %}"
+                      hx-confirm="Delete “{{ obj.name }}”? This cannot be undone."
+                      hx-swap="none" title="Delete">
+                <i class="bi bi-trash"></i>
+              </button>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

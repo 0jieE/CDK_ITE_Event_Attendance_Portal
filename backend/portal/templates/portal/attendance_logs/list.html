@@ -1,0 +1,92 @@
+{% extends "portal/base.html" %}
+{% block title %}Attendance Logs{% endblock %}
+{% block page_title %}Attendance Logs{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2 class="page-title">Attendance Logs</h2>
+    <div class="page-sub"><i class="bi bi-info-circle"></i> Read-only &mdash; logs come from instructor scanning.</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <!-- Filters -->
+    <form class="row g-2 mb-3 no-print"
+          hx-get="{% url 'portal:attendance_logs-list' %}"
+          hx-target="#logs-table-container" hx-swap="innerHTML"
+          hx-trigger="change delay:150ms, submit">
+      <input type="hidden" name="partial" value="table">
+      <div class="col-12 col-md-3">
+        <label class="form-label small mb-1">Event</label>
+        <select name="event" class="form-select form-select-sm">
+          <option value="">All events</option>
+          {% for e in events %}
+            <option value="{{ e.id }}" {% if filters.event == e.id|stringformat:'s' %}selected{% endif %}>{{ e.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label small mb-1">Student</label>
+        <select name="student" class="form-select form-select-sm">
+          <option value="">All students</option>
+          {% for s in students %}
+            <option value="{{ s.id }}" {% if filters.student == s.id|stringformat:'s' %}selected{% endif %}>
+              {{ s.student_number }} — {{ s.user.get_full_name|default:s.user.username }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small mb-1">Type</label>
+        <select name="attendance_type" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for val, label in attendance_types %}
+            <option value="{{ val }}" {% if filters.attendance_type == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for val, label in statuses %}
+            <option value="{{ val }}" {% if filters.status == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small mb-1">Year</label>
+        <select name="year_level" class="form-select form-select-sm">
+          <option value="">All years</option>
+          {% for val, label in year_levels %}
+            <option value="{{ val }}" {% if filters.year_level == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small mb-1">Section</label>
+        <select name="section" class="form-select form-select-sm">
+          <option value="">All sections</option>
+          {% for sec in sections %}
+            <option value="{{ sec }}" {% if filters.section == sec %}selected{% endif %}>{{ sec }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-1">
+        <label class="form-label small mb-1">From</label>
+        <input type="date" name="date_from" value="{{ filters.date_from }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-6 col-md-1">
+        <label class="form-label small mb-1">To</label>
+        <input type="date" name="date_to" value="{{ filters.date_to }}" class="form-control form-control-sm">
+      </div>
+    </form>
+
+    <div id="logs-table-container">
+      {% include "portal/attendance_logs/partials/table.html" %}
+    </div>
+  </div>
+</div>
+{% endblock %}

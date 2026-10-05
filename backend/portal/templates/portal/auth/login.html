@@ -1,0 +1,138 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="{{ ui.mode }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="{{ ui.sidebar }}">
+  <title>Sign in · ITE Attendance Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  {% include "portal/partials/style_theme.html" %}
+  <style>
+    body { min-height: 100vh; min-height: 100dvh; }
+    .auth { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
+
+    /* ---- brand panel ---- */
+    .auth-brand {
+      position: relative; overflow: hidden; color: #fff;
+      display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 1.5rem;
+      padding: clamp(2rem, 6vw, 5rem);
+      background:
+        radial-gradient(900px 500px at 12% -10%, rgba(var(--brand-rgb), .55), transparent 60%),
+        radial-gradient(700px 420px at 100% 110%, rgba(var(--brand-rgb), .35), transparent 60%),
+        linear-gradient(160deg, var(--sidebar), var(--sidebar-end));
+    }
+    .auth-brand::before, .auth-brand::after { content: ""; position: absolute; border-radius: 50%; border: 1px solid rgba(255,255,255,.08); pointer-events: none; }
+    .auth-brand::before { width: 520px; height: 520px; right: -190px; top: -140px; }
+    .auth-brand::after { width: 360px; height: 360px; left: -120px; bottom: -130px; background: rgba(var(--brand-rgb), .08); }
+    .auth-logo { width: clamp(88px, 12vw, 128px); height: clamp(88px, 12vw, 128px); object-fit: contain; border-radius: 50%; background: #fff; padding: 5px; box-shadow: 0 0 0 4px rgba(var(--brand-rgb), .6), 0 20px 50px -12px rgba(0,0,0,.5); }
+    .auth-brand h1 { font-size: clamp(1.6rem, 1.1rem + 2vw, 2.5rem); font-weight: 700; letter-spacing: -.03em; line-height: 1.12; margin: 0; max-width: 16ch; }
+    .auth-brand p { color: rgba(255,255,255,.72); max-width: 42ch; margin: 0; font-size: 1.02rem; }
+    .auth-feats { list-style: none; padding: 0; margin: .25rem 0 0; display: grid; gap: .6rem; color: rgba(255,255,255,.85); font-size: .92rem; }
+    .auth-feats i { color: var(--brand); margin-right: .55rem; }
+
+    /* ---- form panel ---- */
+    .auth-form { display: flex; align-items: center; justify-content: center; padding: clamp(1.25rem, 4vw, 3rem); }
+    .auth-card { width: 100%; max-width: 410px; }
+    .auth-card h2 { font-size: 1.65rem; font-weight: 700; letter-spacing: -.025em; margin-bottom: .25rem; }
+    .auth-card .lead-sm { color: var(--muted); margin-bottom: 1.5rem; }
+    .auth-mini-logo { display: none; }
+    .input-icon { position: relative; }
+    .input-icon > .bi { position: absolute; left: .9rem; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+    .input-icon .form-control { padding: .72rem .9rem .72rem 2.6rem; }
+    .input-icon .pw-toggle { position: absolute; right: .35rem; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: var(--muted); width: 2.3rem; height: 2.3rem; border-radius: .6rem; }
+    .input-icon .pw-toggle:hover { color: var(--brand-ink); background: rgba(var(--brand-rgb), .1); }
+    .input-icon.has-toggle .form-control { padding-right: 2.9rem; }
+    .auth-submit { padding: .75rem 1rem; font-size: 1rem; }
+
+    @media (max-width: 899.98px) {
+      .auth { grid-template-columns: 1fr; }
+      .auth-brand { display: none; }
+      .auth-form { background:
+        radial-gradient(600px 300px at 50% -10%, rgba(var(--brand-rgb), .22), transparent 70%), var(--app-bg); }
+      .auth-card { background: var(--app-surface); border: 1px solid var(--line); border-radius: 20px; padding: 1.5rem 1.35rem; box-shadow: var(--shadow-lg); }
+      .auth-mini-logo { display: block; width: 76px; height: 76px; object-fit: contain; border-radius: 50%; background: #fff; padding: 4px; margin: 0 auto 1rem; box-shadow: 0 0 0 3px rgba(var(--brand-rgb), .55); }
+      .auth-card { text-align: left; }
+      .auth-card .brand-line { text-align: center; margin-bottom: 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="auth">
+    <section class="auth-brand" aria-hidden="true">
+      <img class="auth-logo" src="{% if ui.logo_url %}{{ ui.logo_url }}{% else %}{% static 'portal/img/ite-logo.png' %}{% endif %}" alt="">
+      <div>
+        <h1>{{ ui.brand_title }}</h1>
+        <p class="mt-3">{{ ui.brand_subtitle }} &mdash; QR attendance and fines for the ITE Department, Colegio de Kidapawan.</p>
+      </div>
+      <ul class="auth-feats">
+        <li><i class="bi bi-qr-code-scan"></i>Instructor QR scanning with scan-time windows</li>
+        <li><i class="bi bi-cash-coin"></i>Automatic per-slot fines and cash tracking</li>
+        <li><i class="bi bi-file-earmark-bar-graph"></i>Attendance and financial reports in one place</li>
+      </ul>
+    </section>
+
+    <main class="auth-form">
+      <div class="auth-card">
+        <div class="brand-line">
+          <img class="auth-mini-logo" src="{% if ui.logo_url %}{{ ui.logo_url }}{% else %}{% static 'portal/img/ite-logo.png' %}{% endif %}" alt="Logo">
+          <h2>Welcome back</h2>
+          <p class="lead-sm">Sign in to the {{ ui.brand_title }} admin portal.</p>
+        </div>
+
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-info{% endif %} py-2 d-flex align-items-start gap-2" role="alert">
+              <i class="bi {% if message.tags == 'error' %}bi-exclamation-circle{% else %}bi-info-circle{% endif %} mt-1"></i>
+              <div>{{ message }}</div>
+            </div>
+          {% endfor %}
+        {% endif %}
+
+        <form method="post" action="" novalidate>
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label" for="identifier">Username or email</label>
+            <div class="input-icon">
+              <i class="bi bi-person"></i>
+              <input type="text" id="identifier" name="identifier" class="form-control" autocomplete="username" autocapitalize="none" autofocus required>
+            </div>
+          </div>
+          <div class="mb-4">
+            <label class="form-label" for="password">Password</label>
+            <div class="input-icon has-toggle">
+              <i class="bi bi-lock"></i>
+              <input type="password" id="password" name="password" class="form-control" autocomplete="current-password" required>
+              <button type="button" class="pw-toggle" id="pwToggle" aria-label="Show password" title="Show password"><i class="bi bi-eye" style="position:static;transform:none;color:inherit"></i></button>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100 auth-submit">
+            <i class="bi bi-box-arrow-in-right"></i> Sign in
+          </button>
+        </form>
+
+        <p class="text-center text-muted small mt-4 mb-0">
+          Authorised staff only. Developer tools live at <code>/admin/</code>.
+        </p>
+      </div>
+    </main>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    (function () {
+      var btn = document.getElementById('pwToggle'), input = document.getElementById('password');
+      btn.addEventListener('click', function () {
+        var show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+        btn.querySelector('i').className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+        input.focus();
+      });
+    })();
+  </script>
+</body>
+</html>

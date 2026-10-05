@@ -1,0 +1,119 @@
+{% extends "portal/base.html" %}
+{% load static %}
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2 class="page-title">Settings</h2>
+    <div class="page-sub"><i class="bi bi-palette"></i> Appearance &amp; branding</div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">User Interface</div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+
+          {% if settings_obj.logo %}
+            <div class="mb-3">
+              <label class="form-label">Current logo</label><br>
+              <img src="{{ settings_obj.logo.url }}" alt="Current logo"
+                   style="height:64px;width:64px;object-fit:contain;border:1px solid var(--bs-border-color);border-radius:.4rem;padding:4px;">
+            </div>
+          {% endif %}
+
+          {% include "portal/partials/form_fields.html" with single_col=True %}
+
+          <div class="d-flex flex-wrap gap-2 mt-4">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Save Settings</button>
+            <a href="{% url 'portal:settings' %}" class="btn btn-light">Reset</a>
+          </div>
+          <p class="text-muted small mt-2 mb-0">
+            Theme &amp; mode preview live as you change them; click <strong>Save</strong> to keep them.
+          </p>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live preview -->
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header">Preview</div>
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <img id="previewLogo"
+               src="{% if ui.logo_url %}{{ ui.logo_url }}{% else %}{% static 'portal/img/ite-logo.png' %}{% endif %}"
+               style="width:42px;height:42px;object-fit:contain;">
+          <div>
+            <div class="fw-semibold" id="previewTitle">{{ ui.brand_title }}</div>
+            <div class="text-muted small" id="previewSubtitle">{{ ui.brand_subtitle }}</div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm mb-2">Primary button</button>
+        <button class="btn btn-outline-primary btn-sm mb-2">Outline</button>
+        <div class="mb-2">
+          <span class="badge text-bg-success">Present</span>
+          <span class="badge text-bg-warning">Late</span>
+          <span class="badge text-bg-danger">Absent</span>
+        </div>
+        <span class="text-brand fw-semibold">Accent text sample</span>
+        <hr>
+        <div class="d-flex flex-wrap gap-2">
+          {% for key, pal in palettes.items %}
+            <span title="{{ key }}" style="display:inline-block;width:26px;height:26px;border-radius:50%;
+                  background:{{ pal.primary }};border:2px solid var(--bs-border-color);box-shadow:0 1px 3px rgba(0,0,0,.15);"></span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ palettes|json_script:"palettes-data" }}
+<script>
+  (function () {
+    const PALETTES = JSON.parse(document.getElementById('palettes-data').textContent);
+    const root = document.documentElement;
+    const themeSel = document.getElementById('id_theme');
+    const modeSel = document.getElementById('id_color_mode');
+    const titleIn = document.getElementById('id_brand_title');
+    const subtitleIn = document.getElementById('id_brand_subtitle');
+
+    function apply() {
+      const p = PALETTES[themeSel.value] || Object.values(PALETTES)[0];
+      root.style.setProperty('--brand', p.primary);
+      root.style.setProperty('--brand-dark', p.primary_dark);
+      root.style.setProperty('--brand-ink', p.link);
+      root.style.setProperty('--on-brand', p.on_primary);
+      root.style.setProperty('--brand-rgb', p.rgb);
+      root.style.setProperty('--sidebar', p.sidebar);
+      root.style.setProperty('--sidebar-end', p.sidebar_end);
+      const dark = modeSel.value === 'dark';
+      root.setAttribute('data-bs-theme', modeSel.value);
+      root.style.setProperty('--app-bg', dark ? '#0e1310' : '#f3f6f3');
+      root.style.setProperty('--app-surface', dark ? '#171d19' : '#ffffff');
+    }
+    if (themeSel) themeSel.addEventListener('change', apply);
+    if (modeSel) modeSel.addEventListener('change', apply);
+    if (titleIn) titleIn.addEventListener('input', e =>
+      document.getElementById('previewTitle').textContent = e.target.value || 'ITE Attendance');
+    if (subtitleIn) subtitleIn.addEventListener('input', e =>
+      document.getElementById('previewSubtitle').textContent = e.target.value);
+
+    // Live-preview an uploaded logo before saving.
+    const logoIn = document.getElementById('id_logo');
+    if (logoIn) logoIn.addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (file) document.getElementById('previewLogo').src = URL.createObjectURL(file);
+    });
+  })();
+</script>
+{% endblock %}
