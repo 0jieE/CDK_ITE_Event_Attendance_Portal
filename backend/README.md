@@ -171,8 +171,12 @@ endpoints require the `IsAdmin` role.**
 | `GET /api/instructor/events/` | instructor | active events running today |
 | `POST /api/instructor/scan/` | instructor | scan a QR token; result includes `student_photo`. Rate-limited |
 | `GET /api/instructor/scans/` | instructor | the instructor's own recent scans |
-| `GET /api/student/profile/`, `events/`, `attendance/`, `fines/`, `balance/` | student | own data only |
-| `POST /api/student/qr/generate/`, `GET /api/student/qr/` | student | create / list own daily QR |
+| `GET /api/student/profile/` | student | own profile incl. name, username, email, year/section, photo |
+| `PATCH /api/student/profile/` | student | edit own first/middle/last name, username, email (student no., year, section are admin-only) |
+| `POST /api/student/profile/password/` | student | change own password (current + new; Django validators; rate-limited) |
+| `GET /api/student/events/` (`?all=true` for past events too), `attendance/` (`?event=`), `fines/`, `balance/` | student | own data only |
+| `POST /api/student/qr/generate/` | student | create today's QR for an event - **today only** (other dates are rejected), once per event-day, idempotent |
+| `GET /api/student/qr/` (`?event=&date=`) | student | list own QR codes (used to show an already-generated QR) |
 
 ---
 

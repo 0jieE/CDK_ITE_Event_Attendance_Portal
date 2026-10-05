@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../utils/errors.dart';
+import 'state_message.dart';
+
 /// Loads a single [Future] and renders loading / error / data, exposing a
 /// [refresh] callback to the data builder (wrap your content in a scrollable
 /// for pull-to-refresh).
@@ -42,34 +45,14 @@ class _AsyncViewState<T> extends State<AsyncView<T>> {
         if (snap.hasError) {
           return RefreshIndicator(
             onRefresh: _refresh,
-            child: LayoutBuilder(
-              builder: (context, c) => SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: c.maxHeight),
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.cloud_off,
-                              size: 56, color: Colors.black26),
-                          const SizedBox(height: 12),
-                          Text('${snap.error}',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.black54)),
-                          const SizedBox(height: 16),
-                          OutlinedButton.icon(
-                            onPressed: _refresh,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+            child: RefreshableCenter(
+              child: StateMessage(
+                icon: Icons.cloud_off,
+                isError: true,
+                title: 'Could not load data',
+                subtitle: friendlyError(snap.error!),
+                actionLabel: 'Retry',
+                onAction: _refresh,
               ),
             ),
           );

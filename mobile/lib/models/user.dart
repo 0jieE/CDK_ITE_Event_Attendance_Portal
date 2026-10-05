@@ -22,6 +22,28 @@ class User {
     this.profileImage,
   });
 
+  /// Copy with edited identity fields. Pass [clearPhoto] to drop the photo
+  /// (a plain `profileImage: null` means "keep the current one").
+  User copyWith({
+    String? username,
+    String? fullName,
+    String? email,
+    String? profileImage,
+    bool clearPhoto = false,
+  }) {
+    return User(
+      id: id,
+      username: username ?? this.username,
+      fullName: fullName ?? this.fullName,
+      email: email ?? this.email,
+      isAdmin: isAdmin,
+      isInstructor: isInstructor,
+      isStudent: isStudent,
+      role: role,
+      profileImage: clearPhoto ? null : (profileImage ?? this.profileImage),
+    );
+  }
+
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id'] as int,

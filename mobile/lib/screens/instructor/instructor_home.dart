@@ -8,6 +8,7 @@ import '../../services/auth_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/async_list_view.dart';
 import '../../widgets/logout_action.dart';
+import '../../widgets/status_chip.dart';
 import 'scanner_screen.dart';
 
 /// Instructor interface: active scannable events + entry to the QR scanner.
@@ -27,7 +28,6 @@ class InstructorHome extends StatelessWidget {
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const ScannerScreen()),
         ),
-        backgroundColor: AppTheme.violet,
         icon: const Icon(Icons.qr_code_scanner),
         label: const Text('Scan QR'),
       ),
@@ -35,11 +35,26 @@ class InstructorHome extends StatelessWidget {
         loader: api.instructorEvents,
         emptyIcon: Icons.event_busy,
         emptyMessage: 'No active events to scan right now.',
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         header: Padding(
           padding: const EdgeInsets.only(bottom: 4),
-          child: Text(
-            'Hello, $name',
-            style: Theme.of(context).textTheme.titleMedium,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Hello, $name',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Active events you can scan for',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            ],
           ),
         ),
         itemBuilder: (context, e) => _EventCard(event: e),
@@ -59,22 +74,19 @@ class _EventCard extends StatelessWidget {
     final range = event.startDate == event.endDate
         ? dfy.format(event.startDate)
         : '${df.format(event.startDate)} – ${dfy.format(event.endDate)}';
+    final brand = context.brand;
     return Card(
       child: ListTile(
-        leading: const CircleAvatar(
-          backgroundColor: Color(0xFFEDE7F4),
-          child: Icon(Icons.event, color: AppTheme.violet),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        leading: CircleAvatar(
+          backgroundColor: brand.tint,
+          child: Icon(Icons.event, color: brand.accent),
         ),
         title: Text(event.name,
-            style: const TextStyle(fontWeight: FontWeight.w600)),
+            style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text('$range\n${event.semesterLabel}'),
         isThreeLine: true,
-        trailing: const Chip(
-          label: Text('Active'),
-          backgroundColor: Color(0xFFE6F4EA),
-          labelStyle: TextStyle(color: Color(0xFF198754), fontSize: 12),
-          visualDensity: VisualDensity.compact,
-        ),
+        trailing: const StatusChip('PRESENT', label: 'Active'),
       ),
     );
   }

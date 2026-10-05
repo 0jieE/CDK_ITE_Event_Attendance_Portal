@@ -20,15 +20,16 @@ class ProfileAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = imageUrl;
+    final brand = context.brand;
     return CircleAvatar(
       radius: radius,
-      backgroundColor: const Color(0xFFE6F4E1),
+      backgroundColor: brand.tint,
       foregroundImage: (url != null && url.isNotEmpty) ? NetworkImage(url) : null,
       onForegroundImageError: (url != null && url.isNotEmpty) ? (_, _) {} : null,
       child: Text(
         name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?',
         style: TextStyle(
-          color: AppTheme.violet,
+          color: brand.accent,
           fontSize: radius * 0.85,
           fontWeight: FontWeight.bold,
         ),

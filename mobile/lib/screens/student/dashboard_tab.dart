@@ -6,9 +6,15 @@ import '../../models/event.dart';
 import '../../models/fine.dart';
 import '../../models/student_profile.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/event_dates.dart';
+import '../../utils/manila_time.dart';
 import '../../widgets/async_view.dart';
+import '../../widgets/balance_card.dart';
 import '../../widgets/profile_avatar.dart';
+import '../../widgets/state_message.dart';
+import '../../widgets/status_chip.dart';
 
 typedef _DashboardData = ({
   StudentProfile profile,
@@ -45,21 +51,28 @@ class DashboardTab extends StatelessWidget {
           children: [
             _ProfileCard(profile: data.profile),
             const SizedBox(height: 16),
-            _BalanceCard(balance: data.balance),
+            BalanceCard(balance: data.balance),
             const SizedBox(height: 24),
-            Text('Active & Upcoming Events',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
+            Text('Active & upcoming events',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
             if (data.events.isEmpty)
               const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: Text('No active events right now.',
-                      style: TextStyle(color: Colors.black54)),
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: StateMessage(
+                  icon: Icons.event_busy,
+                  title: 'No active events right now',
+                  subtitle: 'New events will appear here once they open.',
                 ),
               )
             else
-              ...data.events.map((e) => _EventTile(event: e)),
+              for (final e in data.events) ...[
+                _EventTile(event: e),
+                const SizedBox(height: 10),
+              ],
           ],
         );
       },
@@ -73,77 +86,35 @@ class _ProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Name and photo come from the cached user so an edit on the Profile tab
+    // shows here immediately.
+    final user = context.watch<AuthProvider>().user;
+    final name = user?.fullName ?? profile.fullName;
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
             ProfileAvatar(
-              imageUrl: profile.profileImage,
-              name: profile.fullName,
-              radius: 28,
+              imageUrl: user?.profileImage,
+              name: name,
+              radius: 30,
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(profile.fullName,
+                  Text(name,
                       style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
+                          fontSize: 18, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 2),
-                  Text(profile.studentNumber,
-                      style: const TextStyle(color: Colors.black54)),
+                  Text(profile.studentNumber, style: TextStyle(color: muted)),
                   if (profile.yearSection.isNotEmpty)
-                    Text(profile.yearSection,
-                        style: const TextStyle(color: Colors.black54)),
+                    Text(profile.yearSection, style: TextStyle(color: muted)),
                 ],
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BalanceCard extends StatelessWidget {
-  final Balance balance;
-  const _BalanceCard({required this.balance});
-
-  @override
-  Widget build(BuildContext context) {
-    final outstanding = double.tryParse(balance.outstanding) ?? 0;
-    final cleared = outstanding <= 0;
-    return Card(
-      color: cleared ? const Color(0xFF198754) : AppTheme.violet,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.account_balance_wallet, color: Colors.white70),
-                const SizedBox(width: 8),
-                Text('Outstanding Balance',
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontSize: 14)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text('₱${balance.outstanding}',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(
-              cleared
-                  ? 'You have no unpaid fines. ✓'
-                  : 'Total fines ₱${balance.totalFines} · Paid ₱${balance.totalPaid}',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.85)),
             ),
           ],
         ),
@@ -163,11 +134,21 @@ class _EventTile extends StatelessWidget {
     final range = event.startDate == event.endDate
         ? dfy.format(event.startDate)
         : '${df.format(event.startDate)} – ${dfy.format(event.endDate)}';
+    final today = isRunningOn(event, manilaToday());
+    final brand = context.brand;
     return Card(
       child: ListTile(
-        leading: const Icon(Icons.event, color: AppTheme.violet),
-        title: Text(event.name),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        leading: CircleAvatar(
+          backgroundColor: brand.tint,
+          child: Icon(Icons.event, color: brand.accent),
+        ),
+        title: Text(event.name,
+            style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text(range),
+        trailing: today
+            ? const StatusChip('PRESENT', label: 'Today')
+            : const StatusChip('', label: 'Upcoming'),
       ),
     );
   }

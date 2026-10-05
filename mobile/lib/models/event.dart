@@ -89,7 +89,8 @@ class Event {
     final end = DateTime(endDate.year, endDate.month, endDate.day);
     while (!d.isAfter(end)) {
       days.add(d);
-      d = d.add(const Duration(days: 1));
+      // Calendar arithmetic (not +24h) so a DST change can't skip/repeat a day.
+      d = DateTime(d.year, d.month, d.day + 1);
     }
     return days;
   }

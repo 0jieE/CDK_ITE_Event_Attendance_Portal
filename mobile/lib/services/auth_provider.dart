@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../models/student_profile.dart';
 import '../models/user.dart';
 import 'api_service.dart';
 
@@ -59,6 +60,29 @@ class AuthProvider extends ChangeNotifier {
     await api.logout();
     _user = null;
     _set(status: AuthStatus.unauthenticated, error: null);
+  }
+
+  /// Mirror an edited profile into the cached user so every header/avatar that
+  /// watches [user] shows the new name, username, e-mail and photo at once.
+  void applyProfile(StudentProfile profile) {
+    final current = _user;
+    if (current == null) return;
+    _user = current.copyWith(
+      username: profile.username.isNotEmpty ? profile.username : null,
+      fullName: profile.fullName.isNotEmpty ? profile.fullName : null,
+      email: profile.email,
+      profileImage: profile.profileImage,
+      clearPhoto: profile.profileImage == null,
+    );
+    notifyListeners();
+  }
+
+  /// Update just the cached photo URL (null = removed).
+  void setPhoto(String? url) {
+    final current = _user;
+    if (current == null) return;
+    _user = current.copyWith(profileImage: url, clearPhoto: url == null);
+    notifyListeners();
   }
 
   void _handleSessionExpired() {

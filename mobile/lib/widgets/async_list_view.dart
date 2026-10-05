@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../utils/errors.dart';
+import 'state_message.dart';
+
 /// A list that loads asynchronously and renders loading / error / empty /
 /// data states, with pull-to-refresh in every state.
 class AsyncListView<T> extends StatefulWidget {
@@ -54,25 +57,31 @@ class _AsyncListViewState<T> extends State<AsyncListView<T>> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snap.hasError) {
-            return _centered(
-              icon: Icons.cloud_off,
-              title: 'Could not load data',
-              subtitle: '${snap.error}',
-              showRetry: true,
+            return RefreshableCenter(
+              child: StateMessage(
+                icon: Icons.cloud_off,
+                isError: true,
+                title: 'Could not load data',
+                subtitle: friendlyError(snap.error!),
+                actionLabel: 'Retry',
+                onAction: _refresh,
+              ),
             );
           }
           final items = snap.data ?? const [];
           if (items.isEmpty) {
-            return _centered(
-              icon: widget.emptyIcon,
-              title: widget.emptyMessage,
+            return RefreshableCenter(
+              child: StateMessage(
+                icon: widget.emptyIcon,
+                title: widget.emptyMessage,
+              ),
             );
           }
           return ListView.separated(
             padding: widget.padding,
             physics: const AlwaysScrollableScrollPhysics(),
             itemCount: items.length + (widget.header != null ? 1 : 0),
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, i) {
               if (widget.header != null) {
                 if (i == 0) return widget.header!;
@@ -82,53 +91,6 @@ class _AsyncListViewState<T> extends State<AsyncListView<T>> {
             },
           );
         },
-      ),
-    );
-  }
-
-  /// A centered message that is still pull-to-refreshable.
-  Widget _centered({
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    bool showRetry = false,
-  }) {
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 56, color: Colors.black26),
-                  const SizedBox(height: 12),
-                  Text(title,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontSize: 16, color: Colors.black54)),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 6),
-                    Text(subtitle,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.black38)),
-                  ],
-                  if (showRetry) ...[
-                    const SizedBox(height: 16),
-                    OutlinedButton.icon(
-                      onPressed: _refresh,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Retry'),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

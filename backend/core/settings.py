@@ -86,9 +86,6 @@ LOGOUT_REDIRECT_URL = "portal:login"
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    # Serves collected static files straight from the app (needed on Render, which
-    # has no nginx). With the Docker/nginx setup nginx answers /static/ first.
-    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -96,6 +93,15 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# WhiteNoise serves the collected static files straight from the app (needed on
+# Render, which has no nginx; with the Docker/nginx setup nginx answers /static/
+# first). Production only: ``runserver`` serves static files itself in DEBUG.
+if not DEBUG:
+    MIDDLEWARE.insert(
+        MIDDLEWARE.index("django.middleware.security.SecurityMiddleware") + 1,
+        "whitenoise.middleware.WhiteNoiseMiddleware",
+    )
 
 ROOT_URLCONF = "core.urls"
 
@@ -248,6 +254,7 @@ REST_FRAMEWORK = {
         # An instructor scanning a queue of students (per instructor).
         "scan": env("THROTTLE_SCAN", default="120/min"),
         "photo": env("THROTTLE_PHOTO", default="10/min"),
+        "password": env("THROTTLE_PASSWORD", default="5/min"),
     },
     # How many reverse proxies sit in front of Django (nginx = 1). Lets DRF
     # derive the real client IP from X-Forwarded-For for throttling instead of

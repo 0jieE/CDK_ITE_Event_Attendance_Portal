@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 
 import '../../models/fine.dart';
 import '../../services/api_service.dart';
-import '../../theme/app_theme.dart';
+import '../../utils/manila_time.dart';
 import '../../widgets/async_view.dart';
+import '../../widgets/balance_card.dart';
+import '../../widgets/state_message.dart';
 import '../../widgets/status_chip.dart';
 
 typedef _FinesData = ({Balance balance, List<Fine> fines});
@@ -33,68 +35,25 @@ class FinesTab extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            _BalanceSummary(balance: data.balance),
+            BalanceCard(balance: data.balance, label: 'Outstanding'),
             const SizedBox(height: 16),
             if (data.fines.isEmpty)
               const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(Icons.celebration_outlined,
-                          size: 56, color: Colors.black26),
-                      SizedBox(height: 12),
-                      Text('No fines on record.',
-                          style: TextStyle(color: Colors.black54)),
-                    ],
-                  ),
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: StateMessage(
+                  icon: Icons.celebration_outlined,
+                  title: 'No fines on record',
+                  subtitle: 'Keep attending events on time!',
                 ),
               )
             else
-              ...data.fines.map((f) => _FineCard(fine: f)),
+              for (final f in data.fines) ...[
+                _FineCard(fine: f),
+                const SizedBox(height: 10),
+              ],
           ],
         );
       },
-    );
-  }
-}
-
-class _BalanceSummary extends StatelessWidget {
-  final Balance balance;
-  const _BalanceSummary({required this.balance});
-
-  @override
-  Widget build(BuildContext context) {
-    final outstanding = double.tryParse(balance.outstanding) ?? 0;
-    return Card(
-      color: outstanding <= 0 ? const Color(0xFF198754) : AppTheme.violet,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Outstanding',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.85), fontSize: 14)),
-            const SizedBox(height: 6),
-            Text('₱${balance.outstanding}',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Total: ₱${balance.totalFines}',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.85))),
-                Text('Paid: ₱${balance.totalPaid}',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.85))),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -107,19 +66,20 @@ class _FineCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         title: Text(fine.eventName,
-            style: const TextStyle(fontWeight: FontWeight.w600)),
+            style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text(
           '${fine.missedSlots} missed slot${fine.missedSlots == 1 ? '' : 's'}'
-          '${fine.paidAt != null ? ' · Paid ${DateFormat('MMM d, y').format(fine.paidAt!)}' : ''}',
+          '${fine.paidAt != null ? ' · Paid ${DateFormat('MMM d, y').format(toManila(fine.paidAt!))}' : ''}',
         ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text('₱${fine.amount}',
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 16)),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 4),
             StatusChip(fine.status),
           ],

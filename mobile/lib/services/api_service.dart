@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' show MediaType;
 
 import '../config/api_config.dart';
 import '../models/attendance_log.dart';
@@ -9,6 +11,7 @@ import '../models/fine.dart';
 import '../models/qr_slot.dart';
 import '../models/student_profile.dart';
 import '../models/user.dart';
+import '../utils/image_type.dart';
 import 'token_storage.dart';
 
 /// Raised for non-2xx responses; carries the parsed body so callers can read
@@ -93,6 +96,32 @@ class ApiService {
     return const [];
   }
 
+  /// Fetch every page of a paginated list endpoint (follows `next`).
+  ///
+  /// Only the `page` number is taken from `next` and re-sent against our own
+  /// base URL — the absolute URL the server builds can carry a different
+  /// scheme/host when it sits behind a proxy.
+  Future<List<dynamic>> _getAll(String path,
+      {Map<String, dynamic>? query}) async {
+    final out = <dynamic>[];
+    var page = 1;
+    // The page cap is a safety net against a server that never ends `next`.
+    for (var i = 0; i < 100; i++) {
+      final data = await getJson(path, query: {
+        ...?query,
+        if (page > 1) 'page': page,
+      });
+      out.addAll(_results(data));
+      final next = data is Map ? data['next'] as String? : null;
+      if (next == null || next.isEmpty) break;
+      final nextPage =
+          int.tryParse(Uri.parse(next).queryParameters['page'] ?? '');
+      if (nextPage == null || nextPage <= page) break;
+      page = nextPage;
+    }
+    return out;
+  }
+
   // --- Instructor ---
   Future<List<Event>> instructorEvents() async {
     final data = await getJson('/instructor/events/');
@@ -136,11 +165,16 @@ class ApiService {
     return Balance.fromJson(data);
   }
 
+  /// Current + upcoming ACTIVE events.
   Future<List<Event>> studentEvents() async {
-    final data = await getJson('/student/events/');
-    return _results(data)
-        .map((e) => Event.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final data = await _getAll('/student/events/');
+    return data.map((e) => Event.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// ALL events (past, current, future), newest start date first.
+  Future<List<Event>> studentEventsAll() async {
+    final data = await _getAll('/student/events/', query: {'all': 'true'});
+    return data.map((e) => Event.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<QrSlot> generateQr({
@@ -164,20 +198,58 @@ class ApiService {
         .toList();
   }
 
+  /// The student's attendance logs (all pages); omit [event] for every event.
   Future<List<AttendanceLog>> studentAttendance({int? event}) async {
-    final data = await getJson('/student/attendance/', query: {
+    final data = await _getAll('/student/attendance/', query: {
       'event': ?event,
     });
-    return _results(data)
+    return data
         .map((e) => AttendanceLog.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
   Future<List<Fine>> studentFines() async {
-    final data = await getJson('/student/fines/');
-    return _results(data)
-        .map((e) => Fine.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final data = await _getAll('/student/fines/');
+    return data.map((e) => Fine.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Edit the student's own profile. [fields] holds only the changed keys of
+  /// `first_name`, `middle_name`, `last_name`, `username`, `email`. Field
+  /// errors arrive as an [ApiException] whose `data` is `{field: [msgs]}`.
+  Future<StudentProfile> updateProfile(Map<String, String> fields) async {
+    final res = await _send('PATCH', '/student/profile/', body: fields);
+    return StudentProfile.fromJson(_decode(res) as Map<String, dynamic>);
+  }
+
+  /// Change the password (204 on success). A wrong current password or a weak
+  /// new one raises an [ApiException] with `current_password` / `new_password`.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await post('/student/profile/password/', body: {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+    });
+  }
+
+  /// Upload a new profile photo (multipart field `image`); returns its URL.
+  Future<String?> uploadPhoto(Uint8List bytes, ImageType type) async {
+    final res = await _sendMultipart('/me/photo/', () {
+      return http.MultipartFile.fromBytes(
+        'image',
+        bytes,
+        filename: 'profile.${type.extension}',
+        contentType: MediaType.parse(type.mime),
+      );
+    });
+    final data = _decode(res);
+    return data is Map ? data['profile_image'] as String? : null;
+  }
+
+  /// Remove the profile photo (204).
+  Future<void> deletePhoto() async {
+    _decode(await _send('DELETE', '/me/photo/'));
   }
 
   /// Try to mint a new access token from the stored refresh token.
@@ -210,14 +282,35 @@ class ApiService {
   // -------------------------------------------------------------------------
   // Core request (with one transparent refresh-and-retry on 401)
   // -------------------------------------------------------------------------
+  /// Runs [attempt] with the current access token; on a 401 refreshes the
+  /// token once and retries. If it still fails the session is over: clear the
+  /// tokens, notify [onUnauthorized] and throw [SessionExpired]. Shared by the
+  /// JSON and multipart paths so both follow one refresh policy.
+  Future<http.Response> _withAuth(
+    Future<http.Response> Function(String? token) attempt,
+  ) async {
+    var res = await attempt(await _tokens.access);
+    if (res.statusCode == 401) {
+      final refreshed = await _refresh();
+      if (refreshed) {
+        res = await attempt(await _tokens.access);
+      }
+      if (res.statusCode == 401) {
+        await _tokens.clear();
+        onUnauthorized?.call();
+        throw SessionExpired();
+      }
+    }
+    return res;
+  }
+
   Future<http.Response> _send(
     String method,
     String path, {
     Map<String, dynamic>? query,
     Object? body,
-  }) async {
-    Future<http.Response> attempt() async {
-      final token = await _tokens.access;
+  }) {
+    return _withAuth((token) {
       final headers = <String, String>{
         'Content-Type': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
@@ -229,24 +322,29 @@ class ApiService {
           return _client.get(uri, headers: headers);
         case 'POST':
           return _client.post(uri, headers: headers, body: encoded);
+        case 'PATCH':
+          return _client.patch(uri, headers: headers, body: encoded);
+        case 'DELETE':
+          return _client.delete(uri, headers: headers);
         default:
           throw UnsupportedError('Unsupported method: $method');
       }
-    }
+    });
+  }
 
-    var res = await attempt();
-    if (res.statusCode == 401) {
-      final refreshed = await _refresh();
-      if (refreshed) {
-        res = await attempt();
-      }
-      if (res.statusCode == 401) {
-        await _tokens.clear();
-        onUnauthorized?.call();
-        throw SessionExpired();
-      }
-    }
-    return res;
+  /// POST a multipart form with one file. [file] is a factory because a
+  /// [http.MultipartRequest] can be sent only once — the 401 retry needs a
+  /// fresh request (and a fresh file stream).
+  Future<http.Response> _sendMultipart(
+    String path,
+    http.MultipartFile Function() file,
+  ) {
+    return _withAuth((token) async {
+      final req = http.MultipartRequest('POST', _uri(path));
+      if (token != null) req.headers['Authorization'] = 'Bearer $token';
+      req.files.add(file());
+      return http.Response.fromStream(await _client.send(req));
+    });
   }
 
   // -------------------------------------------------------------------------

@@ -43,6 +43,7 @@ from attendance.mobile_views import (
     StudentBalanceView,
     StudentEventsView,
     StudentFinesView,
+    StudentPasswordView,
     StudentProfileView,
     StudentQRGenerateView,
     StudentQRListView,
@@ -71,6 +72,7 @@ api_patterns = [
     path("instructor/scans/", InstructorScansView.as_view(), name="instructor-scans"),
     # --- Student (mobile, own data only) ---
     path("student/profile/", StudentProfileView.as_view(), name="student-profile"),
+    path("student/profile/password/", StudentPasswordView.as_view(), name="student-password"),
     path("student/events/", StudentEventsView.as_view(), name="student-events"),
     path("student/qr/generate/", StudentQRGenerateView.as_view(), name="student-qr-generate"),
     path("student/qr/", StudentQRListView.as_view(), name="student-qr-list"),

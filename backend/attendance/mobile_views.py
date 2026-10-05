@@ -27,7 +27,9 @@ from .mobile_serializers import (
     ScanResultSerializer,
     StudentAttendanceSerializer,
     StudentFineSerializer,
+    StudentPasswordChangeSerializer,
     StudentProfileSerializer,
+    StudentProfileUpdateSerializer,
 )
 from . import services
 from .serializers import AttendanceLogSerializer, EventSerializer
@@ -207,7 +209,7 @@ class StudentScopedMixin:
 
 
 class StudentProfileView(StudentScopedMixin, APIView):
-    """The authenticated student's own profile."""
+    """The authenticated student's own profile (read, and edit their own info)."""
 
     @extend_schema(responses=StudentProfileSerializer)
     def get(self, request):
@@ -215,21 +217,58 @@ class StudentProfileView(StudentScopedMixin, APIView):
             StudentProfileSerializer(self.get_student(), context={"request": request}).data
         )
 
+    @extend_schema(request=StudentProfileUpdateSerializer, responses=StudentProfileSerializer)
+    def patch(self, request):
+        """Update name / username / email. Only ever touches ``request.user``."""
+        student = self.get_student()
+        ser = StudentProfileUpdateSerializer(
+            data=request.data, partial=True, context={"user": request.user}
+        )
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        student.refresh_from_db()
+        student.user.refresh_from_db()
+        return Response(
+            StudentProfileSerializer(student, context={"request": request}).data
+        )
+
+
+class StudentPasswordView(StudentScopedMixin, APIView):
+    """``POST /api/student/profile/password/`` - change own password."""
+
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password"
+
+    @extend_schema(request=StudentPasswordChangeSerializer, responses={204: None})
+    def post(self, request):
+        self.get_student()
+        ser = StudentPasswordChangeSerializer(data=request.data, context={"user": request.user})
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class StudentEventsView(StudentScopedMixin, generics.ListAPIView):
-    """Active events that haven't ended yet (current + upcoming)."""
+    """Active events that haven't ended yet (current + upcoming).
+
+    ``?all=true`` returns **every** event - past, current and future - newest
+    first (used by the history filter, which needs finished events too).
+    """
 
     serializer_class = EventSerializer
     queryset = Event.objects.none()
 
+    @extend_schema(parameters=[OpenApiParameter("all", bool, description="Include past events")])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
     def get_queryset(self):
         self.get_student()  # enforce ownership / profile presence
+        qs = Event.objects.select_related("semester__school_year")
+        if self.request.query_params.get("all", "").lower() in ("1", "true", "yes"):
+            return qs.order_by("-start_date", "name")
         today = timezone.localdate()
-        return (
-            Event.objects.filter(is_active=True, end_date__gte=today)
-            .select_related("semester__school_year")
-            .order_by("start_date", "name")
-        )
+        return qs.filter(is_active=True, end_date__gte=today).order_by("start_date", "name")
 
 
 class StudentQRGenerateView(StudentScopedMixin, APIView):

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../models/qr_slot.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/manila_time.dart';
 import '../../widgets/profile_avatar.dart';
 
 /// Instructor QR scanner. Each detected code is sent to `/api/instructor/scan/`;
@@ -76,7 +77,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Scan Attendance QR'),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
+        shape: const Border(),
+        title: const Text('Scan Attendance QR',
+            style: TextStyle(color: Colors.white)),
         actions: [
           IconButton(
             tooltip: 'Toggle torch',
@@ -104,8 +110,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 width: 240,
                 height: 240,
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white70, width: 3),
-                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.green, width: 4),
+                  borderRadius: BorderRadius.circular(24),
                 ),
               ),
             ),
@@ -149,6 +155,8 @@ class _ResultCard extends StatelessWidget {
     final (Color color, IconData icon, String title) = _style();
     return Card(
       color: color,
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -182,7 +190,8 @@ class _ResultCard extends StatelessWidget {
                     ),
                     if (result.scannedAt != null)
                       Text(
-                        DateFormat('MMM d, h:mm a').format(result.scannedAt!),
+                        DateFormat('MMM d, h:mm a')
+                            .format(toManila(result.scannedAt!)),
                         style: const TextStyle(color: Colors.white70),
                       ),
                   ] else

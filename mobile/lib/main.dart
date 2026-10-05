@@ -9,6 +9,7 @@ import 'services/api_service.dart';
 import 'services/auth_provider.dart';
 import 'theme/app_theme.dart';
 import 'widgets/logout_action.dart';
+import 'widgets/state_message.dart';
 
 void main() {
   runApp(const IteAttendanceApp());
@@ -31,6 +32,8 @@ class IteAttendanceApp extends StatelessWidget {
         title: 'ITE Attendance',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: ThemeMode.system,
         home: const RootRouter(),
       ),
     );
@@ -67,14 +70,14 @@ class _SplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: AppTheme.violet,
+      backgroundColor: AppTheme.green,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.qr_code_2, size: 64, color: Colors.white),
-            SizedBox(height: 16),
-            CircularProgressIndicator(color: Colors.white),
+            Icon(Icons.qr_code_2, size: 72, color: AppTheme.onGreen),
+            SizedBox(height: 20),
+            CircularProgressIndicator(color: AppTheme.onGreen),
           ],
         ),
       ),
@@ -101,17 +104,13 @@ class _UnsupportedRoleScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.info_outline, size: 56, color: Colors.black26),
-              const SizedBox(height: 12),
-              Text('Hello, ${user?.fullName ?? ''}',
-                  style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              const Text(
-                'This mobile app is for instructors and students.\n'
-                'Department Advisers use the web portal.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.black54),
+              const StateMessage(
+                icon: Icons.info_outline,
+                title: 'This app is for instructors and students',
+                subtitle: 'Department Advisers use the web portal.',
               ),
+              Text('Signed in as ${user?.fullName ?? ''}',
+                  style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
         ),

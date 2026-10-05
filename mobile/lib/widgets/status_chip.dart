@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Small colored pill for a status (PRESENT/LATE/ABSENT/PAID/UNPAID).
+/// Soft pill badge for a status: Present = green tint, Late = amber tint,
+/// Absent = red tint (PAID/UNPAID follow green/red).
 class StatusChip extends StatelessWidget {
   final String status;
   final String? label;
@@ -10,21 +11,25 @@ class StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = AppTheme.statusColor(status);
+    final c = context.brand.badge(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
+        color: c.bg,
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        label ?? _titleCase(status),
-        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
+        label ?? titleCase(status),
+        style: TextStyle(
+          color: c.fg,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+          height: 1.2,
+        ),
       ),
     );
   }
 
-  static String _titleCase(String s) =>
+  static String titleCase(String s) =>
       s.isEmpty ? s : s[0].toUpperCase() + s.substring(1).toLowerCase();
 }

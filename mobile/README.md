@@ -43,6 +43,13 @@ flutter run            # device/emulator must reach the backend
 Sign in with an **instructor** or **student** account. Admins are sent to a
 "use the web portal" screen by design.
 
+## Student features
+- **QR:** one QR per event-day. Only today's date is selectable (other days of a multi-day event are
+  muted); once generated it is shown inline with a full-screen view instead of the Generate button.
+- **History:** filter by event (defaults to the event closest to today), grouped by date.
+- **Profile:** change photo (camera/gallery), name, email, username and password.
+- **Theme:** Material 3 in the ITE brand green `#41B422` (light + dark).
+
 ## Structure
 ```
 lib/

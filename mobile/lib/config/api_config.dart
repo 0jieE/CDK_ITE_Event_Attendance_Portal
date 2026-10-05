@@ -10,13 +10,13 @@
 ///   * Android emulator -> host loopback:  http://10.0.2.2:8000
 ///   * iOS simulator:                      http://127.0.0.1:8000
 ///   * Release APK against the deployed backend (origin only: no `/api`):
-///       flutter build apk --release --dart-define=API_BASE_URL=https://attendance.example.com
+///       flutter build apk --release --dart-define=API_BASE_URL=https://cdk-ite-event-attendance.onrender.com
 ///
 /// See DEPLOYMENT.md ("Flutter release APK") for the full procedure.
 class ApiConfig {
   static const String _rawBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.1.9:8080',
+    defaultValue: 'https://cdk-ite-event-attendance.onrender.com/',
   );
 
   /// Backend origin, normalised so a trailing `/` can't produce `//api`.
