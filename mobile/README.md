@@ -43,6 +43,11 @@ flutter run            # device/emulator must reach the backend
 Sign in with an **instructor** or **student** account. Admins are sent to a
 "use the web portal" screen by design.
 
+## Instructor features
+- **Scan:** pick today's event and scan students' QR codes.
+- **Attendance:** review attendance in **every** event (finished, running, upcoming): choose a day,
+  see per-slot present/absent totals and each student's status (search + Missing/Complete filters).
+
 ## Student features
 - **QR:** one QR per event-day. Only today's date is selectable (other days of a multi-day event are
   muted); once generated it is shown inline with a full-screen view instead of the Generate button.

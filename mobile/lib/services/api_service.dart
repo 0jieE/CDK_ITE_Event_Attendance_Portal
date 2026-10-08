@@ -7,11 +7,13 @@ import 'package:http_parser/http_parser.dart' show MediaType;
 import '../config/api_config.dart';
 import '../models/attendance_log.dart';
 import '../models/event.dart';
+import '../models/event_attendance.dart';
 import '../models/fine.dart';
 import '../models/qr_slot.dart';
 import '../models/student_profile.dart';
 import '../models/user.dart';
 import '../utils/image_type.dart';
+import '../utils/manila_time.dart' show apiDate;
 import 'token_storage.dart';
 
 /// Raised for non-2xx responses; carries the parsed body so callers can read
@@ -217,6 +219,28 @@ class ApiService {
     return _results(data)
         .map((e) => Event.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// ALL events (finished, running, upcoming), newest start date first —
+  /// instructors only. (Without `all=true` the endpoint lists just today's
+  /// scannable events, see [instructorEvents].)
+  Future<List<Event>> instructorEventsAll() async {
+    final data = await _getAll('/instructor/events/', query: {'all': 'true'});
+    return data.map((e) => Event.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// The class roster for one event-day. Omit [date] to let the server pick
+  /// (today if the event runs today, else its last/first day). A bad or
+  /// out-of-range date is a 400 [ApiException]; an unknown event is a 404.
+  Future<EventAttendance> instructorEventAttendance(
+    int eventId, {
+    DateTime? date,
+  }) async {
+    final data = await getJson(
+      '/instructor/events/$eventId/attendance/',
+      query: {if (date != null) 'date': apiDate(date)},
+    );
+    return EventAttendance.fromJson(data as Map<String, dynamic>);
   }
 
   /// Submit a scanned token. Never throws for the documented failure cases —
@@ -453,9 +477,19 @@ class ApiService {
 
   dynamic _decode(http.Response res) {
     final ok = res.statusCode >= 200 && res.statusCode < 300;
-    final parsed = res.body.isNotEmpty ? jsonDecode(res.body) : null;
-    if (ok) return parsed;
-    throw ApiException(res.statusCode, _messageFrom(parsed), parsed);
+    if (ok) return res.body.isNotEmpty ? jsonDecode(res.body) : null;
+    // Error bodies are often NOT JSON (a proxy's or Django's HTML error page); decode
+    // leniently so they become a proper ApiException, not a FormatException that the UI
+    // would show as "could not reach the server".
+    final parsed = _tryDecode(res.body);
+    throw ApiException(res.statusCode, _messageFrom(parsed, _fallbackFor(res.statusCode)), parsed);
+  }
+
+  /// Message for an error response that carried no readable `detail`.
+  String _fallbackFor(int status) {
+    if (status == 404) return "This feature isn't available on the server yet.";
+    if (status >= 500) return 'The server had a problem. Please try again in a moment.';
+    return 'Request failed.';
   }
 
   ApiException _exceptionFrom(http.Response res, {required String fallback}) {

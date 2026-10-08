@@ -37,6 +37,7 @@ from attendance.views import (
 )
 from core.views import healthz
 from attendance.mobile_views import (
+    InstructorEventAttendanceView,
     InstructorEventsView,
     InstructorScanView,
     InstructorScansView,
@@ -70,6 +71,8 @@ api_patterns = [
     path("me/photo/", MyPhotoView.as_view(), name="me-photo"),
     # --- Instructor (mobile) ---
     path("instructor/events/", InstructorEventsView.as_view(), name="instructor-events"),
+    path("instructor/events/<int:pk>/attendance/", InstructorEventAttendanceView.as_view(),
+         name="instructor-event-attendance"),
     path("instructor/scan/", InstructorScanView.as_view(), name="instructor-scan"),
     path("instructor/scans/", InstructorScansView.as_view(), name="instructor-scans"),
     # --- Student (mobile, own data only) ---

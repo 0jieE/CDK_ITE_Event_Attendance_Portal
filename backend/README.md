@@ -186,7 +186,8 @@ alert on the dashboard show how many are waiting).
 | `POST /api/auth/register/` | **anyone** | student self-sign-up (JSON or multipart with optional photo). Creates an **inactive, PENDING** account; rate-limited (5/hour/IP) |
 | `GET /api/me/` | any user | identity, role flags and `profile_image` (used to route the app) |
 | `POST/DELETE /api/me/photo/` | any user | set (multipart `image`) / remove **own** profile photo |
-| `GET /api/instructor/events/` | instructor | active events running today |
+| `GET /api/instructor/events/` | instructor | active events running today (`?all=true`: **every** event, newest first) |
+| `GET /api/instructor/events/{id}/attendance/` (`?date=`) | instructor | read-only class roster for one event-day: every approved student with PRESENT / LATE / ABSENT / PENDING per required slot, plus per-slot totals |
 | `POST /api/instructor/scan/` | instructor | scan a QR token; result includes `student_photo`. Rate-limited |
 | `GET /api/instructor/scans/` | instructor | the instructor's own recent scans |
 | `GET /api/student/profile/` | student | own profile incl. name, username, year/section, photo |

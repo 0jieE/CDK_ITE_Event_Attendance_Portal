@@ -4,9 +4,11 @@ All endpoints reuse the existing models, JWT auth and RBAC permission classes.
 Student endpoints are strictly scoped to ``request.user``'s own record.
 """
 
+import datetime
 from decimal import Decimal
 
 from django.db.models import Sum
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, status
@@ -18,7 +20,7 @@ from rest_framework.views import APIView
 from accounts.models import Instructor, Student
 from accounts.permissions import IsInstructor, IsStudent
 
-from .models import AttendanceLog, Event, Fine, QRCode
+from .models import AttendanceLog, AttendanceType, Event, Fine, QRCode, default_required_types
 from .mobile_serializers import (
     BalanceSerializer,
     QRCodeMobileSerializer,
@@ -43,20 +45,128 @@ _DATE_PARAM = OpenApiParameter("date", str, description="Filter by date (YYYY-MM
 # Instructor APIs
 # ===========================================================================
 class InstructorEventsView(generics.ListAPIView):
-    """Active events whose date range includes today (scannable right now)."""
+    """Active events whose date range includes today (scannable right now).
+
+    ``?all=true`` returns **every** event (finished, running, upcoming), newest
+    first - used by the app's Attendance tab so an instructor can review any event.
+    """
 
     serializer_class = EventSerializer
     permission_classes = [IsInstructor]
 
+    @extend_schema(parameters=[OpenApiParameter("all", bool, description="Include every event")])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
     def get_queryset(self):
+        qs = Event.objects.select_related("semester__school_year")
+        if self.request.query_params.get("all", "").lower() in ("1", "true", "yes"):
+            return qs.order_by("-start_date", "name")
         today = timezone.localdate()
-        return (
-            Event.objects.filter(
-                is_active=True, start_date__lte=today, end_date__gte=today
-            )
-            .select_related("semester__school_year")
-            .order_by("start_date", "name")
+        return qs.filter(
+            is_active=True, start_date__lte=today, end_date__gte=today
+        ).order_by("start_date", "name")
+
+
+class InstructorEventAttendanceView(APIView):
+    """``GET /api/instructor/events/{id}/attendance/?date=YYYY-MM-DD``
+
+    The full class roster for one event-day: every approved student with the
+    status of each required slot - PRESENT / LATE, ABSENT (window closed, no
+    scan) or PENDING (window not closed yet, so not a miss). Read-only.
+    """
+
+    permission_classes = [IsInstructor]
+
+    @extend_schema(parameters=[OpenApiParameter("date", str, description="YYYY-MM-DD (default: today / nearest day)")])
+    def get(self, request, pk):
+        event = get_object_or_404(Event, pk=pk)
+        dates = list(event.iter_dates())
+        now = timezone.localtime()
+        today = now.date()
+
+        raw = request.query_params.get("date")
+        if raw:
+            try:
+                day = datetime.date.fromisoformat(raw)
+            except ValueError:
+                return Response({"date": ["Use the format YYYY-MM-DD."]}, status=400)
+            if not (event.start_date <= day <= event.end_date):
+                return Response(
+                    {"date": [f"Date must be within {event.start_date} - {event.end_date}."]}, status=400)
+        elif event.start_date <= today <= event.end_date:
+            day = today
+        else:
+            day = event.end_date if today > event.end_date else event.start_date
+
+        slots_in_order = [s for s in default_required_types() if s in (event.required_types or [])]
+        slot_meta = []
+        for slot in slots_in_order:
+            start, end = event.slot_window(slot)
+            slot_meta.append({
+                "type": slot,
+                "label": AttendanceType(slot).label,
+                "window_start": start.isoformat() if start else None,
+                "window_end": end.isoformat() if end else None,
+                "elapsed": services.slot_has_elapsed(event, day, slot, now),
+                "present": 0, "absent": 0, "pending": 0,
+            })
+
+        logs = {
+            (log.student_id, log.attendance_type): log
+            for log in AttendanceLog.objects.filter(
+                event=event, date=day, attendance_type__in=slots_in_order)
+            if log.is_credited
+        }
+        roster = (
+            Student.objects.filter(approval_status=Student.ApprovalStatus.APPROVED)
+            .select_related("user")
+            .order_by("user__last_name", "user__first_name", "student_number")
         )
+
+        students = []
+        for st in roster:
+            # Someone approved after this day wasn't enrolled yet (same rule as fines).
+            if st.reviewed_at and day < timezone.localtime(st.reviewed_at).date() \
+                    and not any((st.pk, s) in logs for s in slots_in_order):
+                continue
+            cells, attended, missed = [], 0, 0
+            for meta in slot_meta:
+                log = logs.get((st.pk, meta["type"]))
+                if log is not None:
+                    status, scanned_at = log.status, log.scanned_at
+                    attended += 1
+                    meta["present"] += 1
+                elif meta["elapsed"]:
+                    status, scanned_at = "ABSENT", None
+                    missed += 1
+                    meta["absent"] += 1
+                else:
+                    status, scanned_at = "PENDING", None
+                    meta["pending"] += 1
+                cells.append({"type": meta["type"], "status": status, "scanned_at": scanned_at})
+            students.append({
+                "id": st.pk,
+                "student_number": st.student_number,
+                "full_name": st.user.get_full_name() or st.user.username,
+                "year_section": st.year_section,
+                "photo": st.user.get_profile_image_url("thumb", request=request),
+                "attended": attended,
+                "missed": missed,
+                "slots": cells,
+            })
+
+        return Response({
+            "event": {
+                "id": event.pk, "name": event.name, "start_date": event.start_date,
+                "end_date": event.end_date, "is_active": event.is_active,
+            },
+            "date": day,
+            "dates": dates,
+            "is_today": day == today,
+            "slots": slot_meta,
+            "students": students,
+        })
 
 
 class InstructorScanView(APIView):
