@@ -1,5 +1,8 @@
 import 'dart:typed_data';
 
+/// Server's upload limit for profile photos.
+const maxPhotoBytes = 5 * 1024 * 1024;
+
 /// A supported upload image type (the server accepts JPG, PNG and WebP).
 class ImageType {
   final String mime;

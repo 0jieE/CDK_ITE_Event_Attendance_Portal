@@ -3,10 +3,10 @@
 Usage::
 
     python manage.py seed_admin
-    python manage.py seed_admin --username adviser --email a@b.c --password secret
+    python manage.py seed_admin --username adviser --password secret
 
 Reads sensible defaults from the environment so it can run unattended in CI:
-``ADMIN_USERNAME``, ``ADMIN_EMAIL``, ``ADMIN_PASSWORD``.
+``ADMIN_USERNAME``, ``ADMIN_PASSWORD``.
 
 Container/production use (``--if-missing``) is strictly idempotent: the admin is
 created only if it does not exist yet and an existing account (including a
@@ -34,10 +34,6 @@ class Command(BaseCommand):
             default=os.environ.get("ADMIN_USERNAME", "admin"),
         )
         parser.add_argument(
-            "--email",
-            default=os.environ.get("ADMIN_EMAIL", "admin@cok-ite.edu.ph"),
-        )
-        parser.add_argument(
             "--password",
             default=os.environ.get("ADMIN_PASSWORD") or DEV_DEFAULT_PASSWORD,
         )
@@ -50,7 +46,6 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         username = options["username"]
-        email = options["email"]
         password = options["password"]
 
         if options["if_missing"]:
@@ -65,9 +60,7 @@ class Command(BaseCommand):
 
         user, created = User.objects.get_or_create(
             username=username,
-            defaults={"email": email},
         )
-        user.email = email
         user.is_admin = True
         user.is_staff = True
         user.is_superuser = True
@@ -78,6 +71,6 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"{verb} admin superuser '{username}' "
-                f"(email={email}). Remember to change the password."
+                "Remember to change the password."
             )
         )

@@ -1,6 +1,6 @@
 /// Student's own profile (from `GET/PATCH /api/student/profile/`).
 ///
-/// Name, e-mail and username are editable by the student; student number,
+/// Name and username are editable by the student; student number,
 /// year level and section are managed by the adviser (read-only in the app).
 class StudentProfile {
   final int id;
@@ -10,7 +10,6 @@ class StudentProfile {
   final String middleName;
   final String lastName;
   final String username;
-  final String email;
   final String yearLevel;
   final String yearLevelDisplay;
   final String section;
@@ -25,7 +24,6 @@ class StudentProfile {
     this.middleName = '',
     this.lastName = '',
     this.username = '',
-    required this.email,
     required this.yearLevel,
     required this.yearLevelDisplay,
     required this.section,
@@ -42,7 +40,6 @@ class StudentProfile {
       middleName: json['middle_name'] as String? ?? '',
       lastName: json['last_name'] as String? ?? '',
       username: json['username'] as String? ?? '',
-      email: json['email'] as String? ?? '',
       yearLevel: json['year_level'] as String? ?? '',
       yearLevelDisplay: json['year_level_display'] as String? ?? '',
       section: json['section'] as String? ?? '',
@@ -60,7 +57,6 @@ class StudentProfile {
         middleName: middleName,
         lastName: lastName,
         username: username,
-        email: email,
         yearLevel: yearLevel,
         yearLevelDisplay: yearLevelDisplay,
         section: section,

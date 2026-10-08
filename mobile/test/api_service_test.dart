@@ -24,7 +24,6 @@ const profileJson = {
   'middle_name': '',
   'last_name': 'Cruz',
   'username': 'jcruz2',
-  'email': 'juan@example.com',
   'year_level': '3',
   'year_level_display': '3rd Year',
   'section': 'A',
@@ -232,6 +231,246 @@ void main() {
       await api.deletePhoto();
       expect(seen.method, 'DELETE');
       expect(seen.url.path, endsWith('/me/photo/'));
+    });
+  });
+
+  group('register', () {
+    const detail = 'Registration received. The Department Adviser must '
+        'approve your account before you can sign in.';
+
+    Future<String> reg(ApiService api, {bool photo = false}) => api.register(
+          studentNumber: '2024-0100',
+          firstName: 'Ana',
+          lastName: 'Reyes',
+          username: 'ana.reyes',
+          password: 'S3cure-pass!',
+          yearLevel: '2',
+          photo: photo
+              ? Uint8List.fromList(
+                  [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 7, 7])
+              : null,
+          photoType: photo ? ImageType.png : null,
+        );
+
+    test('sends JSON without Authorization or optional blanks', () async {
+      late http.Request seen;
+      final paths = <String>[];
+      final client = MockClient((req) async {
+        paths.add(req.url.path);
+        seen = req;
+        return json({'status': 'PENDING', 'detail': detail}, 201);
+      });
+      // Tokens exist (e.g. a stale session) but must not be attached.
+      final api = ApiService(tokens: FakeTokens(), client: client);
+
+      expect(await reg(api), detail);
+      expect(seen.method, 'POST');
+      expect(seen.url.path, endsWith('/auth/register/'));
+      expect(seen.headers['content-type'], startsWith('application/json'));
+      expect(seen.headers.containsKey('Authorization'), isFalse);
+      expect(jsonDecode(seen.body), {
+        'student_number': '2024-0100',
+        'first_name': 'Ana',
+        'last_name': 'Reyes',
+        'username': 'ana.reyes',
+        'password': 'S3cure-pass!',
+        'year_level': '2',
+      });
+      expect(paths.length, 1);
+    });
+
+    test('sends optional middle name and section when given', () async {
+      late Map<String, dynamic> sent;
+      final client = MockClient((req) async {
+        sent = jsonDecode(req.body) as Map<String, dynamic>;
+        return json({'detail': detail}, 201);
+      });
+      final api = ApiService(tokens: FakeTokens(), client: client);
+      await api.register(
+        studentNumber: '1',
+        firstName: 'A',
+        middleName: 'B',
+        lastName: 'C',
+        username: 'abc',
+        password: 'x',
+        yearLevel: '1',
+        section: 'A',
+      );
+      expect(sent['middle_name'], 'B');
+      expect(sent['section'], 'A');
+    });
+
+    test('uses multipart (profile_image) when a photo is attached', () async {
+      late http.Request seen;
+      final client = MockClient((req) async {
+        seen = req;
+        return json({'detail': detail}, 201);
+      });
+      final api = ApiService(tokens: FakeTokens(), client: client);
+
+      await reg(api, photo: true);
+      final body = latin1.decode(seen.bodyBytes);
+      expect(seen.url.path, endsWith('/auth/register/'));
+      expect(seen.headers['content-type'], startsWith('multipart/form-data'));
+      expect(seen.headers.containsKey('Authorization'), isFalse);
+      expect(body, contains('name="profile_image"'));
+      expect(body, contains('filename="profile.png"'));
+      expect(body, contains('image/png'));
+      expect(body, contains('name="student_number"'));
+      expect(body, contains('2024-0100'));
+      expect(body, contains('name="year_level"'));
+      expect(body, isNot(contains('name="middle_name"')));
+    });
+
+    test('falls back to a default message when the body has no detail',
+        () async {
+      final client = MockClient((req) async => json({}, 201));
+      final api = ApiService(tokens: FakeTokens(), client: client);
+      expect(await reg(api), contains('Department Adviser'));
+    });
+
+    test('400 carries per-field errors', () async {
+      final client = MockClient((req) async => json({
+            'student_number': [
+              'A student with that number is already registered.'
+            ],
+            'password': ['This password is too common.', 'Too short.'],
+          }, 400));
+      final api = ApiService(tokens: FakeTokens(), client: client);
+      try {
+        await reg(api);
+        fail('expected ApiException');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 400);
+        expect(fieldErrors(e), {
+          'student_number': 'A student with that number is already registered.',
+          'password': 'This password is too common. Too short.',
+        });
+      }
+    });
+
+    test('429 becomes a friendly rate-limit error', () async {
+      final client = MockClient((req) async => json({
+            'detail':
+                'Request was throttled. Expected available in 3000 seconds.'
+          }, 429));
+      final api = ApiService(tokens: FakeTokens(), client: client);
+      try {
+        await reg(api);
+        fail('expected ApiException');
+      } on ApiException catch (e) {
+        expect(e.isRateLimited, isTrue);
+        expect(friendlyError(e), 'Too many attempts, try again later.');
+      }
+    });
+
+    test('a 401 is not treated as an expired session (no refresh, no logout)',
+        () async {
+      final paths = <String>[];
+      var expired = false;
+      final tokens = FakeTokens();
+      final client = MockClient((req) async {
+        paths.add(req.url.path);
+        return json({'detail': 'nope'}, 401);
+      });
+      final api = ApiService(tokens: tokens, client: client)
+        ..onUnauthorized = () => expired = true;
+      await expectLater(reg(api), throwsA(isA<ApiException>()));
+      expect(paths.single, endsWith('/auth/register/'));
+      expect(expired, isFalse);
+      expect(await tokens.hasTokens, isTrue);
+    });
+
+    test('a non-JSON error page still gives an ApiException', () async {
+      final client = MockClient(
+          (req) async => http.Response('<html>Bad gateway</html>', 502));
+      final api = ApiService(tokens: FakeTokens(), client: client);
+      await expectLater(
+        reg(api),
+        throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 502)),
+      );
+    });
+  });
+
+  group('login outcomes', () {
+    ApiService apiFor(http.Response Function() respond, List<String> paths,
+        {void Function()? onExpired}) {
+      return ApiService(
+        tokens: FakeTokens(access: null, refresh: null),
+        client: MockClient((req) async {
+          paths.add(req.url.path);
+          return respond();
+        }),
+      )..onUnauthorized = onExpired;
+    }
+
+    test('403 PENDING_APPROVAL exposes its code and is not a session expiry',
+        () async {
+      final paths = <String>[];
+      var expired = false;
+      final api = apiFor(
+        () => json({
+          'detail': 'Waiting for approval.',
+          'code': 'PENDING_APPROVAL',
+        }, 403),
+        paths,
+        onExpired: () => expired = true,
+      );
+      try {
+        await api.login('ana', 'pw');
+        fail('expected ApiException');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 403);
+        expect(e.code, ApiCodes.pendingApproval);
+        expect(e.isPendingApproval, isTrue);
+        expect(e.isRegistrationRejected, isFalse);
+        expect(e.message, 'Waiting for approval.');
+      }
+      expect(paths, hasLength(1)); // login only: no /auth/refresh/ call
+      expect(paths.single, endsWith('/auth/login/'));
+      expect(expired, isFalse);
+    });
+
+    test('403 REGISTRATION_REJECTED keeps the adviser reason in the message',
+        () async {
+      final api = apiFor(
+        () => json({
+          'detail': 'Your registration was declined: wrong section.',
+          'code': 'REGISTRATION_REJECTED',
+        }, 403),
+        [],
+      );
+      try {
+        await api.login('ana', 'pw');
+        fail('expected ApiException');
+      } on ApiException catch (e) {
+        expect(e.code, ApiCodes.registrationRejected);
+        expect(e.isRegistrationRejected, isTrue);
+        expect(e.message, contains('wrong section'));
+      }
+    });
+
+    test('401 wrong credentials: friendly message and no code', () async {
+      final api = apiFor(
+        () => json(
+            {'detail': 'No active account found with the given credentials'},
+            401),
+        [],
+      );
+      try {
+        await api.login('ana', 'bad');
+        fail('expected ApiException');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 401);
+        expect(e.code, isNull);
+        expect(e.message, 'Invalid username or password.');
+      }
+    });
+
+    test('a non-string code is ignored', () {
+      expect(ApiException(400, 'x', {'code': 5}).code, isNull);
+      expect(ApiException(400, 'x', ['a']).code, isNull);
+      expect(ApiException(400, 'x').code, isNull);
     });
   });
 

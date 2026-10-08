@@ -44,6 +44,20 @@ Related accepted trade-offs:
 | **Secrets** | `.env`, `.env.*` (except `*.example`) and TLS keys are gitignored and excluded from the Docker image. The admin account is created once from `ADMIN_PASSWORD`; the well-known development password is refused in production. |
 | **Container** | Django runs as an unprivileged user; the database is not published to the host; Gunicorn is reachable only through nginx. |
 
+## Student self-registration
+
+- `POST /api/auth/register/` is public by design but **harmless until approved**: the account is
+  created inactive (`is_active=False`, status `PENDING`), can't sign in, receive tokens or reach any
+  endpoint, and can never be given an admin/instructor/staff role through sign-up.
+- Abuse limits: rate-limited per client IP (`THROTTLE_REGISTER`, 5/hour), Django password
+  validators, username / student-number uniqueness, validated photo uploads.
+- The adviser decides: approval is the only way to activate a sign-up (editing a pending student in
+  the portal cannot activate it). Pending/rejected students are excluded from fines.
+- Login hints are limited: only someone who supplies the **correct** password is told the account is
+  pending/rejected; wrong credentials get the same generic 401, so usernames can't be probed.
+- Email is not stored at all (not needed: sign-in is username + password), so there is no
+  personal email data to leak.
+
 ## Profile photos and Cloudinary
 
 - **Validation:** uploads must be real JPG/PNG/WebP images up to 5 MB and 25 MP. Each

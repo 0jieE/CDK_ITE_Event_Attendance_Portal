@@ -17,8 +17,10 @@ val dartDefines: Map<String, String> =
             pair[0] to pair.getOrElse(1) { "" }
         }
 val apiBaseUrl: String = dartDefines["API_BASE_URL"] ?: ""
-// No define => the dev default (http://...) is used, which needs cleartext.
-val allowCleartext: Boolean = apiBaseUrl.isEmpty() || apiBaseUrl.startsWith("http://")
+// No define => the default baked into lib/config/api_config.dart (the https://
+// deployed backend) is used, so cleartext stays blocked. Only an explicit
+// http:// API_BASE_URL (e.g. a LAN demo server) turns it on for a release build.
+val allowCleartext: Boolean = apiBaseUrl.startsWith("http://")
 
 android {
     namespace = "ph.edu.cok.ite_attendance"

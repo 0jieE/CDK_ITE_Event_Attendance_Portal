@@ -81,7 +81,7 @@ Configuration is read from `.env` via **django-environ**. Keys:
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` / `_FOLDER` | image storage (profile photos, QR PNGs, logo); blank = local disk |
 | `JWT_ACCESS_MINUTES` / `JWT_REFRESH_DAYS` | token lifetimes (30 min / 7 days) |
 | `NUM_PROXIES`, `THROTTLE_*` | reverse-proxy depth and API rate limits |
-| `ADMIN_USERNAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | first-run Department Adviser (containers) |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | first-run Department Adviser (containers) |
 
 Every production variable, with comments, is in [`.env.prod.example`](.env.prod.example).
 
@@ -117,7 +117,7 @@ python manage.py test                # security/isolation/throttling/fines/UI te
 ```
 
 `seed_admin` defaults to `admin / Admin@12345` (override with
-`--username/--email/--password`, or `ADMIN_USERNAME/ADMIN_EMAIL/ADMIN_PASSWORD`
+`--username/--password`, or `ADMIN_USERNAME/ADMIN_PASSWORD`
 env vars). **Change the password after first login.**
 
 ---
@@ -149,7 +149,8 @@ endpoints require the `IsAdmin` role.**
 |----------|---------|-------|
 | `users/` | CRUD | role flags; passwords hashed |
 | `instructors/` | CRUD | creates linked user (`is_instructor`) |
-| `students/` | CRUD | creates linked user (`is_student`); `?semester=&school_year=` |
+| `students/` | CRUD | creates linked user (`is_student`); `?semester=&school_year=&approval_status=` |
+| `students/{id}/approve/`, `students/{id}/reject/` | POST | approve / reject a self-registered student (reject takes optional `{"reason"}`) |
 | `school-years/` | CRUD | |
 | `semesters/` | CRUD | `?school_year=` |
 | `events/` | CRUD | `?semester=&school_year=&is_active=`; validates dates + required_types |
@@ -161,18 +162,35 @@ endpoints require the `IsAdmin` role.**
 | `reports/attendance/` | GET | `?semester=&event=&date_from=&date_to=`; `&format=csv` to download |
 | `reports/financial/` | GET | same filters; `&format=csv` to download |
 
+### Student sign-up & approval
+
+Students can register themselves in the mobile app (**Create account**). The account is
+created **inactive** with status `PENDING`, so it can't sign in or call any API until the
+Department Adviser approves it under **Portal -> Approvals** (a badge in the sidebar and an
+alert on the dashboard show how many are waiting).
+
+* **Approve** activates the account. **Reject** keeps it inactive and stores an optional reason.
+* A correct login for a pending/rejected student returns `403` with `code` =
+  `PENDING_APPROVAL` / `REGISTRATION_REJECTED` (wrong credentials stay a generic `401`).
+* Pending and rejected students are **never fined**; a student approved part-way through an event
+  is accountable only from their approval day on (students added by the adviser: all days).
+* Sign-ups are rate-limited per IP (`THROTTLE_REGISTER`, default `5/hour`). Deleting a rejected
+  student (Portal -> Students) frees their username and student number for a new sign-up.
+* **No email field exists anywhere:** accounts are username + password only.
+
 ### Mobile / system endpoints
 
 | Endpoint | Who | Notes |
 |----------|-----|-------|
 | `GET /healthz/` | anyone | liveness + database check (200 / 503) for proxies and uptime monitors |
+| `POST /api/auth/register/` | **anyone** | student self-sign-up (JSON or multipart with optional photo). Creates an **inactive, PENDING** account; rate-limited (5/hour/IP) |
 | `GET /api/me/` | any user | identity, role flags and `profile_image` (used to route the app) |
 | `POST/DELETE /api/me/photo/` | any user | set (multipart `image`) / remove **own** profile photo |
 | `GET /api/instructor/events/` | instructor | active events running today |
 | `POST /api/instructor/scan/` | instructor | scan a QR token; result includes `student_photo`. Rate-limited |
 | `GET /api/instructor/scans/` | instructor | the instructor's own recent scans |
-| `GET /api/student/profile/` | student | own profile incl. name, username, email, year/section, photo |
-| `PATCH /api/student/profile/` | student | edit own first/middle/last name, username, email (student no., year, section are admin-only) |
+| `GET /api/student/profile/` | student | own profile incl. name, username, year/section, photo |
+| `PATCH /api/student/profile/` | student | edit own first/middle/last name and username (student no., year, section are admin-only) |
 | `POST /api/student/profile/password/` | student | change own password (current + new; Django validators; rate-limited) |
 | `GET /api/student/events/` (`?all=true` for past events too), `attendance/` (`?event=`), `fines/`, `balance/` | student | own data only |
 | `POST /api/student/qr/generate/` | student | create today's QR for an event - **today only** (other dates are rejected), once per event-day, idempotent |
@@ -189,7 +207,7 @@ Cloudinary and the database is Render PostgreSQL. Short version:
 
 1. **New -> Blueprint** on Render, pick this repo (it reads `render.yaml`).
 2. Fill the prompted secrets: `DATABASE_URL` (Render Postgres **Internal** URL),
-   `ADMIN_PASSWORD` (+ `ADMIN_EMAIL`) and the three `CLOUDINARY_*` values.
+   `ADMIN_PASSWORD` and the three `CLOUDINARY_*` values.
 3. Deploy. The container migrates, collects static files, seeds the adviser and creates the
    Cloudinary folders on every start. Open `https://<service>.onrender.com/portal/login/`.
 4. Build the mobile APK against that URL:
@@ -239,7 +257,7 @@ A bare superuser without `is_admin` is **not** allowed into the portal
 1. Seed/ensure an admin: `python manage.py seed_admin` → `admin` / `Admin@12345`
    (this user has `is_admin=True`).
 2. Visit **`/portal/login/`** (the site root `/` redirects here) and sign in
-   with **username _or_ email** + password. Change the password after first use.
+   with **username** + password. Change the password after first use.
 
 ### Where each section lives (all under `/portal/`)
 | Section | URL | Notes |

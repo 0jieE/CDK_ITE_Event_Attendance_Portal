@@ -14,6 +14,7 @@ from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from accounts.models import Instructor, Student
 from attendance import services
@@ -55,7 +56,7 @@ logger = logging.getLogger(__name__)
 # Authentication (Django sessions)
 # ---------------------------------------------------------------------------
 def login_view(request):
-    """Session login for the Department Adviser (username **or** email)."""
+    """Session login for the Department Adviser (username + password)."""
     if is_portal_admin(request.user):
         return redirect("portal:dashboard")
 
@@ -63,13 +64,7 @@ def login_view(request):
         identifier = (request.POST.get("identifier") or "").strip()
         password = request.POST.get("password") or ""
 
-        username = identifier
-        if "@" in identifier:
-            match = User.objects.filter(email__iexact=identifier).first()
-            if match:
-                username = match.get_username()
-
-        user = authenticate(request, username=username, password=password)
+        user = authenticate(request, username=identifier, password=password)
         if user is None:
             messages.error(request, "Invalid credentials. Please try again.")
         elif not is_portal_admin(user):
@@ -101,6 +96,8 @@ def dashboard_view(request):
     context = {
         "active": "dashboard",
         "data": data,
+        "pending_approvals": Student.objects.filter(
+            approval_status=Student.ApprovalStatus.PENDING).count(),
         "chart_labels": [e["event_name"] for e in data["events"]],
         "chart_collected": [float(e["collected"]) for e in data["events"]],
         "chart_outstanding": [float(e["outstanding"]) for e in data["events"]],
@@ -257,6 +254,59 @@ def attendance_logs_view(request):
     if is_htmx(request) and request.GET.get("partial") == "table":
         return render(request, "portal/attendance_logs/partials/table.html", context)
     return render(request, "portal/attendance_logs/list.html", context)
+
+
+# ---------------------------------------------------------------------------
+# Student sign-up approvals
+# ---------------------------------------------------------------------------
+_APPROVAL_TABS = (Student.ApprovalStatus.PENDING, Student.ApprovalStatus.REJECTED)
+
+
+def _approval_counts():
+    return {s.value: Student.objects.filter(approval_status=s).count() for s in _APPROVAL_TABS}
+
+
+@admin_required
+def approvals_view(request):
+    """Students who registered in the mobile app, waiting for (or denied) approval."""
+    status = request.GET.get("status")
+    if status not in {s.value for s in _APPROVAL_TABS}:
+        status = Student.ApprovalStatus.PENDING.value
+    partial = is_htmx(request) and request.GET.get("partial") == "table"
+    ctx = {
+        "active": "approvals",
+        "status": status,
+        "counts": _approval_counts(),
+        "objects": Student.objects.select_related("user")
+        .filter(approval_status=status).order_by("user__date_joined"),
+        "oob": partial,        # only HTMX fragments carry the out-of-band badge update
+    }
+    template = "portal/approvals/partials/table.html" if partial else "portal/approvals/list.html"
+    return render(request, template, ctx)
+
+
+@admin_required
+@require_POST
+def approval_approve_view(request, pk):
+    student = get_object_or_404(Student.objects.select_related("user"), pk=pk)
+    student.approve(by=request.user)
+    return htmx_action_response(
+        toast=f"{student.user.get_full_name() or student.user.username} approved - they can sign in now.",
+        refresh_event="refresh-approvals", close_modal=False,
+    )
+
+
+@admin_required
+def approval_reject_view(request, pk):
+    """Modal asking for an optional reason, then rejects the sign-up."""
+    student = get_object_or_404(Student.objects.select_related("user"), pk=pk)
+    if request.method == "POST":
+        student.reject(by=request.user, reason=request.POST.get("reason", ""))
+        return htmx_action_response(
+            toast=f"{student.user.get_full_name() or student.user.username} rejected.",
+            level="warning", refresh_event="refresh-approvals",
+        )
+    return render(request, "portal/approvals/partials/reject_form.html", {"student": student})
 
 
 # ---------------------------------------------------------------------------

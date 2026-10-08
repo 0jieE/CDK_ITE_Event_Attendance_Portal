@@ -33,7 +33,7 @@ class StudentTestBase(TestCase):
         cache.clear()
         self.today = timezone.localdate()
         self.user = User.objects.create_user(
-            "stud", password=STRONG, is_student=True, email="s@x.ph",
+            "stud", password=STRONG, is_student=True,
             first_name="Ana", middle_name="B", last_name="Reyes")
         self.student = Student.objects.create(
             user=self.user, student_number="2024-1", year_level="2", section="A")
@@ -111,21 +111,22 @@ class ProfileUpdateTests(StudentTestBase):
 
     def test_get_returns_editable_fields_and_readonly_academic_info(self):
         data = self.client.get(reverse(self.url)).json()
-        for key in ("first_name", "middle_name", "last_name", "username", "email",
+        self.assertNotIn("email", data)          # email no longer exists
+        for key in ("first_name", "middle_name", "last_name", "username",
                     "student_number", "year_level", "section", "year_section", "profile_image"):
             self.assertIn(key, data)
         self.assertEqual((data["first_name"], data["middle_name"], data["username"]), ("Ana", "B", "stud"))
 
     def test_patch_updates_only_own_allowed_fields(self):
         res = self.client.patch(reverse(self.url), {
-            "first_name": " Anna ", "last_name": "Reyes-Lim", "email": "new@x.ph", "middle_name": "",
+            "first_name": " Anna ", "last_name": "Reyes-Lim", "email": "ignored@x.ph", "middle_name": "",
             # attempts to change admin-managed data must be ignored:
             "student_number": "HACK", "year_level": "4", "section": "Z", "is_admin": True,
         }, format="json")
         self.assertEqual(res.status_code, 200, res.content)
         self.user.refresh_from_db(); self.student.refresh_from_db()
-        self.assertEqual((self.user.first_name, self.user.last_name, self.user.email),
-                         ("Anna", "Reyes-Lim", "new@x.ph"))
+        self.assertEqual((self.user.first_name, self.user.last_name), ("Anna", "Reyes-Lim"))
+        self.assertFalse(hasattr(self.user, "email") and self.user.email)   # no such column
         self.assertEqual((self.student.student_number, self.student.year_level, self.student.section),
                          ("2024-1", "2", "A"))
         self.assertFalse(self.user.is_admin)
@@ -143,9 +144,9 @@ class ProfileUpdateTests(StudentTestBase):
         self.assertEqual(self.client.patch(reverse(self.url), {"username": "Ana.Reyes"}, format="json").status_code, 200)
 
     def test_validation_errors_are_per_field(self):
-        res = self.client.patch(reverse(self.url), {"email": "nope", "first_name": "  ", "username": ""}, format="json")
+        res = self.client.patch(reverse(self.url), {"first_name": "  ", "username": ""}, format="json")
         self.assertEqual(res.status_code, 400)
-        self.assertEqual(set(res.json()), {"email", "first_name", "username"})
+        self.assertEqual(set(res.json()), {"first_name", "username"})
 
     def test_other_students_data_is_never_touched(self):
         other = User.objects.create_user("o", password="x", is_student=True, first_name="Other")

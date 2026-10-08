@@ -31,9 +31,9 @@ class IteAttendanceApp extends StatelessWidget {
       child: MaterialApp(
         title: 'ITE Attendance',
         debugShowCheckedModeBanner: false,
+        // Always the light + green look, even when the phone is in dark mode.
         theme: AppTheme.light,
-        darkTheme: AppTheme.dark,
-        themeMode: ThemeMode.system,
+        themeMode: AppTheme.themeMode,
         home: const RootRouter(),
       ),
     );

@@ -19,6 +19,7 @@ from accounts.views import (
     InstructorViewSet,
     MeView,
     MyPhotoView,
+    StudentRegisterView,
     StudentViewSet,
     ThrottledTokenObtainPairView,
     ThrottledTokenRefreshView,
@@ -63,6 +64,7 @@ api_patterns = [
     # JWT auth
     path("auth/login/", ThrottledTokenObtainPairView.as_view(), name="auth-login"),
     path("auth/refresh/", ThrottledTokenRefreshView.as_view(), name="auth-refresh"),
+    path("auth/register/", StudentRegisterView.as_view(), name="auth-register"),
     # Current user (mobile routing after login)
     path("me/", MeView.as_view(), name="me"),
     path("me/photo/", MyPhotoView.as_view(), name="me-photo"),

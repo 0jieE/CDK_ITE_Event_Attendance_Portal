@@ -75,6 +75,10 @@ class AppTheme {
     neutralFg: _darkMuted,
   );
 
+  /// The app is deliberately light-only (light surfaces + ITE green); it does not
+  /// follow the phone's dark-mode setting.
+  static const ThemeMode themeMode = ThemeMode.light;
+
   static ThemeData get light => _build(Brightness.light);
   static ThemeData get dark => _build(Brightness.dark);
 

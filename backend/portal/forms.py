@@ -147,7 +147,6 @@ class UserForm(BootstrapModelForm):
             "first_name",
             "middle_name",
             "last_name",
-            "email",
             "profile_image",
             "is_admin",
             "is_instructor",
@@ -189,7 +188,6 @@ class LinkedUserForm(BootstrapModelForm):
     first_name = forms.CharField(max_length=150, required=False)
     middle_name = forms.CharField(max_length=150, required=False)
     last_name = forms.CharField(max_length=150, required=False)
-    email = forms.EmailField(required=False)
     profile_image = forms.ImageField(
         required=False,
         label="Profile photo",
@@ -206,7 +204,7 @@ class LinkedUserForm(BootstrapModelForm):
     #: order in which user fields appear before any model-specific fields
     user_field_order = [
         "profile_image", "username", "first_name", "middle_name", "last_name",
-        "email", "password", "is_active",
+        "password", "is_active",
     ]
 
     def __init__(self, *args, **kwargs):
@@ -218,7 +216,6 @@ class LinkedUserForm(BootstrapModelForm):
             self.fields["first_name"].initial = u.first_name
             self.fields["middle_name"].initial = u.middle_name
             self.fields["last_name"].initial = u.last_name
-            self.fields["email"].initial = u.email
             self.fields["profile_image"].initial = u.profile_image
             self.fields["is_active"].initial = u.is_active
 
@@ -242,6 +239,10 @@ class LinkedUserForm(BootstrapModelForm):
             raise forms.ValidationError("Password is required when creating.")
         return pwd
 
+    def _resolve_active(self, wanted):
+        """Hook: subclasses may veto activating the account (default: as requested)."""
+        return wanted
+
     def _save_user(self):
         """Create or update the linked user, enforcing the role flag."""
         creating = self.instance.pk is None
@@ -250,8 +251,7 @@ class LinkedUserForm(BootstrapModelForm):
         user.first_name = self.cleaned_data.get("first_name", "")
         user.middle_name = self.cleaned_data.get("middle_name", "")
         user.last_name = self.cleaned_data.get("last_name", "")
-        user.email = self.cleaned_data.get("email", "")
-        user.is_active = self.cleaned_data.get("is_active", True)
+        user.is_active = self._resolve_active(self.cleaned_data.get("is_active", True))
         image = self.cleaned_data.get("profile_image")
         if image is False:                 # "Remove photo" ticked
             user.profile_image = None
@@ -285,6 +285,12 @@ class InstructorForm(LinkedUserForm):
 
 class StudentForm(LinkedUserForm):
     role_flag = "is_student"
+
+    def _resolve_active(self, wanted):
+        # A pending/rejected sign-up can only be activated from the Approvals page.
+        if self.instance.pk and not self.instance.is_approved:
+            return False
+        return wanted
 
     field_order = [
         "student_number", "year_level", "section",

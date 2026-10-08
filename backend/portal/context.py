@@ -13,6 +13,7 @@ _NAV = [
     {"key": "users", "label": "Users", "url": "portal:users-list", "icon": "people"},
     {"key": "instructors", "label": "Instructors", "url": "portal:instructors-list", "icon": "person-badge"},
     {"key": "students", "label": "Students", "url": "portal:students-list", "icon": "mortarboard"},
+    {"key": "approvals", "label": "Approvals", "url": "portal:approvals", "icon": "person-check"},
     {"key": "school_years", "label": "School Years", "url": "portal:school_years-list", "icon": "calendar3"},
     {"key": "semesters", "label": "Semesters", "url": "portal:semesters-list", "icon": "calendar-week"},
     {"key": "events", "label": "Events", "url": "portal:events-list", "icon": "calendar-event"},
@@ -40,9 +41,26 @@ def _resolve(item):
     return out
 
 
+def _pending_approvals(request):
+    """Number of student sign-ups awaiting approval (0 for anonymous / on any DB error)."""
+    if not getattr(request, "user", None) or not request.user.is_authenticated:
+        return 0
+    try:
+        from accounts.models import Student
+
+        return Student.objects.filter(approval_status=Student.ApprovalStatus.PENDING).count()
+    except Exception:
+        return 0
+
+
 def sidebar_nav(request):
-    """Provide ``nav_items`` to every template under the portal."""
-    return {"nav_items": [_resolve(item) for item in _NAV]}
+    """Provide ``nav_items`` (with the pending-approvals badge) to every portal template."""
+    items = [_resolve(item) for item in _NAV]
+    pending = _pending_approvals(request)
+    for item in items:
+        if item["key"] == "approvals":
+            item["badge"] = pending
+    return {"nav_items": items}
 
 
 def _ui_from(pal, *, theme, mode, brand_title, brand_subtitle, logo_url, compact):

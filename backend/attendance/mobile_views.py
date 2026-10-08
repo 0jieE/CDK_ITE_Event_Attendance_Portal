@@ -205,6 +205,8 @@ class StudentScopedMixin:
         ).first()
         if student is None:
             raise PermissionDenied("No student profile is linked to this account.")
+        if not student.is_approved:
+            raise PermissionDenied("Your registration has not been approved yet.")
         return student
 
 
@@ -219,7 +221,7 @@ class StudentProfileView(StudentScopedMixin, APIView):
 
     @extend_schema(request=StudentProfileUpdateSerializer, responses=StudentProfileSerializer)
     def patch(self, request):
-        """Update name / username / email. Only ever touches ``request.user``."""
+        """Update name / username. Only ever touches ``request.user``."""
         student = self.get_student()
         ser = StudentProfileUpdateSerializer(
             data=request.data, partial=True, context={"user": request.user}

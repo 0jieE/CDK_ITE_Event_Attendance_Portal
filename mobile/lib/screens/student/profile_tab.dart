@@ -15,9 +15,6 @@ import '../../widgets/profile_avatar.dart';
 import '../../widgets/state_message.dart';
 import 'change_password_screen.dart';
 
-/// Server's upload limit for profile photos.
-const _maxPhotoBytes = 5 * 1024 * 1024;
-
 /// The student's profile: photo, editable account details, read-only school
 /// info, password change and logout.
 class ProfileTab extends StatefulWidget {
@@ -32,7 +29,6 @@ class _ProfileTabState extends State<ProfileTab> {
   final _first = TextEditingController();
   final _middle = TextEditingController();
   final _last = TextEditingController();
-  final _email = TextEditingController();
   final _username = TextEditingController();
   final _picker = ImagePicker();
 
@@ -51,7 +47,6 @@ class _ProfileTabState extends State<ProfileTab> {
     _first,
     _middle,
     _last,
-    _email,
     _username,
   ];
 
@@ -106,7 +101,6 @@ class _ProfileTabState extends State<ProfileTab> {
     _first.text = p.firstName;
     _middle.text = p.middleName;
     _last.text = p.lastName;
-    _email.text = p.email;
     _username.text = p.username;
     _serverErrors.clear();
     _formError = null;
@@ -120,7 +114,6 @@ class _ProfileTabState extends State<ProfileTab> {
       firstName: _first.text,
       middleName: _middle.text,
       lastName: _last.text,
-      email: _email.text,
       username: _username.text,
     );
   }
@@ -136,7 +129,6 @@ class _ProfileTabState extends State<ProfileTab> {
     'first_name': _first,
     'middle_name': _middle,
     'last_name': _last,
-    'email': _email,
     'username': _username,
   };
 
@@ -249,7 +241,7 @@ class _ProfileTabState extends State<ProfileTab> {
             content: Text('Unsupported image. Please use a JPG, PNG or WebP.')));
         return;
       }
-      if (bytes.length > _maxPhotoBytes) {
+      if (bytes.length > maxPhotoBytes) {
         messenger.showSnackBar(const SnackBar(
             content: Text('That photo is too large (max 5 MB).')));
         return;
@@ -381,10 +373,6 @@ class _ProfileTabState extends State<ProfileTab> {
                   _field(_last, 'last_name', 'Last name',
                       validator: (v) => validateRequired(v, 'last name'),
                       capitalization: TextCapitalization.words),
-                  _field(_email, 'email', 'Email',
-                      validator: validateEmail,
-                      keyboard: TextInputType.emailAddress,
-                      icon: Icons.mail_outline),
                   _field(_username, 'username', 'Username',
                       validator: (v) => validateRequired(v, 'username'),
                       icon: Icons.alternate_email,

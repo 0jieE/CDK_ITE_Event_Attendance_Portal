@@ -22,11 +22,29 @@ class ApiException implements Exception {
   final dynamic data;
   ApiException(this.statusCode, this.message, [this.data]);
 
-  /// Backend error code (e.g. STALE_QR) when present.
-  String? get code => data is Map ? data['code'] as String? : null;
+  /// Backend machine code (e.g. STALE_QR, PENDING_APPROVAL) when present.
+  String? get code {
+    final c = data is Map ? data['code'] : null;
+    return c is String ? c : null;
+  }
+
+  /// A correct-credentials login of an account the adviser hasn't approved yet.
+  bool get isPendingApproval => code == ApiCodes.pendingApproval;
+
+  /// A correct-credentials login of an account the adviser rejected.
+  bool get isRegistrationRejected => code == ApiCodes.registrationRejected;
+
+  /// Too many requests (e.g. registration rate limit).
+  bool get isRateLimited => statusCode == 429;
 
   @override
   String toString() => message;
+}
+
+/// Machine codes the backend puts in `{"detail": ..., "code": ...}`.
+class ApiCodes {
+  static const pendingApproval = 'PENDING_APPROVAL';
+  static const registrationRejected = 'REGISTRATION_REJECTED';
 }
 
 /// Raised when the session can't be recovered (refresh failed) — the app
@@ -76,7 +94,78 @@ class ApiService {
       );
       return;
     }
-    throw _exceptionFrom(res, fallback: 'Invalid username or password.');
+    final error = _exceptionFrom(res, fallback: 'Invalid username or password.');
+    // Wrong credentials: always our own wording rather than the server's
+    // "No active account found...". The 403 approval responses (which carry a
+    // `code`) are passed through untouched for the UI to branch on.
+    if (res.statusCode == 401) {
+      throw ApiException(401, 'Invalid username or password.', error.data);
+    }
+    throw error;
+  }
+
+  /// Student self-registration (anonymous: no Authorization header, and none
+  /// of the 401 refresh logic). The account is created inactive and must be
+  /// approved by the Department Adviser before it can sign in.
+  ///
+  /// Sends JSON, or multipart/form-data when a [photo] is attached. Returns the
+  /// server's confirmation message. Throws [ApiException]: 400 carries
+  /// `{field: [msgs]}`, 429 means rate limited (message already friendly).
+  Future<String> register({
+    required String studentNumber,
+    required String firstName,
+    String middleName = '',
+    required String lastName,
+    required String username,
+    required String password,
+    required String yearLevel,
+    String section = '',
+    Uint8List? photo,
+    ImageType? photoType,
+  }) async {
+    final fields = <String, String>{
+      'student_number': studentNumber,
+      'first_name': firstName,
+      if (middleName.isNotEmpty) 'middle_name': middleName,
+      'last_name': lastName,
+      'username': username,
+      'password': password,
+      'year_level': yearLevel,
+      if (section.isNotEmpty) 'section': section,
+    };
+
+    final http.Response res;
+    if (photo != null && photoType != null) {
+      final req = http.MultipartRequest('POST', _uri('/auth/register/'))
+        ..fields.addAll(fields)
+        ..files.add(http.MultipartFile.fromBytes(
+          'profile_image',
+          photo,
+          filename: 'profile.${photoType.extension}',
+          contentType: MediaType.parse(photoType.mime),
+        ));
+      res = await http.Response.fromStream(await _client.send(req));
+    } else {
+      res = await _client.post(
+        _uri('/auth/register/'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode(fields),
+      );
+    }
+
+    if (res.statusCode == 201 || res.statusCode == 200) {
+      final parsed = _tryDecode(res.body);
+      final detail = parsed is Map ? parsed['detail'] : null;
+      return detail is String && detail.isNotEmpty
+          ? detail
+          : 'Registration received. The Department Adviser must approve your '
+              'account before you can sign in.';
+    }
+    if (res.statusCode == 429) {
+      throw ApiException(
+          429, 'Too many attempts, try again later.', _tryDecode(res.body));
+    }
+    throw _exceptionFrom(res, fallback: 'Could not create your account.');
   }
 
   Future<User> fetchMe() async {
@@ -214,7 +303,7 @@ class ApiService {
   }
 
   /// Edit the student's own profile. [fields] holds only the changed keys of
-  /// `first_name`, `middle_name`, `last_name`, `username`, `email`. Field
+  /// `first_name`, `middle_name`, `last_name`, `username`. Field
   /// errors arrive as an [ApiException] whose `data` is `{field: [msgs]}`.
   Future<StudentProfile> updateProfile(Map<String, String> fields) async {
     final res = await _send('PATCH', '/student/profile/', body: fields);
@@ -370,8 +459,19 @@ class ApiService {
   }
 
   ApiException _exceptionFrom(http.Response res, {required String fallback}) {
-    final parsed = res.body.isNotEmpty ? jsonDecode(res.body) : null;
+    final parsed = _tryDecode(res.body);
     return ApiException(res.statusCode, _messageFrom(parsed, fallback), parsed);
+  }
+
+  /// Decoded JSON, or null when the body is empty / not JSON (e.g. a proxy's
+  /// HTML error page).
+  dynamic _tryDecode(String body) {
+    if (body.isEmpty) return null;
+    try {
+      return jsonDecode(body);
+    } on FormatException {
+      return null;
+    }
   }
 
   String _messageFrom(dynamic parsed, [String fallback = 'Request failed.']) {

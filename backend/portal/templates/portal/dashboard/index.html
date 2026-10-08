@@ -14,6 +14,14 @@
     </div>
   </div>
 
+  {% if pending_approvals %}
+    <div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3" role="alert">
+      <div><i class="bi bi-person-exclamation me-2"></i>
+        <strong>{{ pending_approvals }}</strong> student{{ pending_approvals|pluralize }} waiting for your approval.</div>
+      <a href="{% url 'portal:approvals' %}" class="btn btn-sm btn-primary no-print">Review sign-ups</a>
+    </div>
+  {% endif %}
+
   <!-- Summary cards -->
   <div class="row g-3 mb-4">
     <div class="col-12 col-sm-6 col-xl-3">

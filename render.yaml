@@ -40,8 +40,6 @@ services:
       # ---- First-run Department Adviser (created once; never overwritten) ----
       - key: ADMIN_USERNAME
         value: adviser
-      - key: ADMIN_EMAIL
-        sync: false
       - key: ADMIN_PASSWORD
         sync: false
 

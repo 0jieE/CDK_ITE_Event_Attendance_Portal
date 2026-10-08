@@ -113,7 +113,10 @@ void main() {
     expect(scheme.onPrimary, AppTheme.onGreen);
   });
 
-  testWidgets('dark theme builds and keeps the green primary', (tester) async {
+  testWidgets('stays light + green even when the phone is in dark mode',
+      (tester) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
     final auth = AuthProvider(
       apiService: ApiService(
         tokens: FakeTokens(access: null, refresh: null),
@@ -125,14 +128,15 @@ void main() {
         value: auth,
         child: MaterialApp(
           theme: AppTheme.light,
-          darkTheme: AppTheme.dark,
-          themeMode: ThemeMode.dark,
+          themeMode: AppTheme.themeMode, // same wiring as main.dart (no darkTheme)
           home: const LoginScreen(),
         ),
       ),
     );
     final theme = Theme.of(tester.element(find.byType(LoginScreen)));
-    expect(theme.brightness, Brightness.dark);
+    expect(AppTheme.themeMode, ThemeMode.light);
+    expect(theme.brightness, Brightness.light);
+    expect(theme.scaffoldBackgroundColor, AppTheme.light.scaffoldBackgroundColor);
     expect(theme.colorScheme.primary, AppTheme.green);
     expect(find.text('Sign in'), findsOneWidget);
   });

@@ -1,11 +1,33 @@
 """User, Instructor and Student models — the RBAC backbone of the system."""
 
-from django.contrib.auth.models import AbstractUser
-from django.db import models
+from django.contrib.auth.hashers import make_password
+from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
+from django.db import models, transaction
 from django.db.models.signals import post_delete
+from django.utils import timezone
 from django.dispatch import receiver
 
 from .images import image_url, normalise_image, profile_upload_to, validate_image_file
+
+
+class UserManager(DjangoUserManager):
+    """Manager for a user model that has **no email field**.
+
+    Django's stock manager always passes ``email=`` to the model; this one keeps
+    the same ``create_user(username, email=None, password=None)`` signature but
+    ignores the email, so existing call sites keep working.
+    """
+
+    use_in_migrations = True
+
+    def _create_user(self, username, email=None, password=None, **extra_fields):
+        if not username:
+            raise ValueError("The given username must be set")
+        username = self.model.normalize_username(username)
+        user = self.model(username=username, **extra_fields)
+        user.password = make_password(password)
+        user.save(using=self._db)
+        return user
 
 
 class User(AbstractUser):
@@ -17,6 +39,13 @@ class User(AbstractUser):
     instructor who is also a department adviser).  Exactly which flags are set
     drives the DRF permission classes in :mod:`accounts.permissions`.
     """
+
+    #: Email is not used anywhere in this system (sign-in is by username, there are
+    #: no email notifications), so the inherited column is removed on purpose.
+    email = None
+    REQUIRED_FIELDS = []
+
+    objects = UserManager()
 
     middle_name = models.CharField(max_length=150, blank=True, null=True)
 
@@ -140,8 +169,55 @@ class Student(models.Model):
     )
     section = models.CharField(max_length=20, blank=True)
 
+    class ApprovalStatus(models.TextChoices):
+        PENDING = "PENDING", "Pending approval"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+
+    #: Students created by the adviser are APPROVED; self-registrations start PENDING
+    #: (with an inactive user) until the Department Adviser reviews them.
+    approval_status = models.CharField(
+        max_length=10,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.APPROVED,
+        db_index=True,
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    rejection_reason = models.CharField(max_length=255, blank=True)
+
     class Meta:
         ordering = ["year_level", "section", "student_number"]
+
+    @property
+    def is_approved(self):
+        return self.approval_status == self.ApprovalStatus.APPROVED
+
+    @transaction.atomic
+    def approve(self, by=None):
+        """Approve a registration: the student can now sign in."""
+        self.approval_status = self.ApprovalStatus.APPROVED
+        self.reviewed_at = timezone.now()
+        self.reviewed_by = by
+        self.rejection_reason = ""
+        self.save(update_fields=["approval_status", "reviewed_at", "reviewed_by", "rejection_reason"])
+        if not self.user.is_active:
+            self.user.is_active = True
+            self.user.save(update_fields=["is_active"])
+
+    @transaction.atomic
+    def reject(self, by=None, reason=""):
+        """Reject a registration: the account stays inactive."""
+        self.approval_status = self.ApprovalStatus.REJECTED
+        self.reviewed_at = timezone.now()
+        self.reviewed_by = by
+        self.rejection_reason = (reason or "").strip()[:255]
+        self.save(update_fields=["approval_status", "reviewed_at", "reviewed_by", "rejection_reason"])
+        if self.user.is_active:
+            self.user.is_active = False
+            self.user.save(update_fields=["is_active"])
 
     def __str__(self):
         return f"{self.student_number} — {self.user.get_full_name() or self.user.username}"

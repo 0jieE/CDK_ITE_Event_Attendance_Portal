@@ -109,7 +109,7 @@ class PortalPagesRenderTests(TestCase):
 
     PAGES = [
         "portal:dashboard", "portal:users-list", "portal:instructors-list",
-        "portal:students-list", "portal:school_years-list", "portal:semesters-list",
+        "portal:students-list", "portal:approvals", "portal:school_years-list", "portal:semesters-list",
         "portal:events-list", "portal:attendance_logs-list", "portal:fines-list",
         "portal:reports-attendance", "portal:reports-financial", "portal:settings",
     ]

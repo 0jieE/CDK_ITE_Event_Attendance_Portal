@@ -255,6 +255,8 @@ REST_FRAMEWORK = {
         "scan": env("THROTTLE_SCAN", default="120/min"),
         "photo": env("THROTTLE_PHOTO", default="10/min"),
         "password": env("THROTTLE_PASSWORD", default="5/min"),
+        # Public student sign-ups (per client IP).
+        "register": env("THROTTLE_REGISTER", default="5/hour"),
     },
     # How many reverse proxies sit in front of Django (nginx = 1). Lets DRF
     # derive the real client IP from X-Forwarded-For for throttling instead of

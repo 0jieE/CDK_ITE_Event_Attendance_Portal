@@ -4,7 +4,7 @@
     <thead>
       <tr>
         <th>Student No.</th><th>Full Name</th><th>Year &amp; Section</th>
-        <th>Username</th><th>Email</th>
+        <th>Username</th><th>Status</th>
         <th>Active</th><th class="text-end no-print">Actions</th>
       </tr>
     </thead>
@@ -20,7 +20,11 @@
           </td>
           <td>{{ obj.year_section|default:"—" }}</td>
           <td>{{ obj.user.username }}</td>
-          <td>{{ obj.user.email|default:"—" }}</td>
+          <td>
+            {% if obj.approval_status == 'PENDING' %}<span class="badge text-bg-warning">Pending approval</span>
+            {% elif obj.approval_status == 'REJECTED' %}<span class="badge text-bg-danger">Rejected</span>
+            {% else %}<span class="badge text-bg-success">Approved</span>{% endif %}
+          </td>
           <td>
             {% if obj.user.is_active %}<span class="badge text-bg-success">Active</span>
             {% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}

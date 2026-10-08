@@ -3,7 +3,7 @@
   <table class="table table-hover align-middle datatable" id="usersTable" width="100%">
     <thead>
       <tr>
-        <th>Username</th><th>Full Name</th><th>Email</th><th>Role</th>
+        <th>Username</th><th>Full Name</th><th>Role</th>
         <th>Active</th><th class="text-end no-print">Actions</th>
       </tr>
     </thead>
@@ -17,7 +17,6 @@
               <span>{{ obj.get_full_name|default:"—" }}</span>
             </div>
           </td>
-          <td>{{ obj.email|default:"—" }}</td>
           <td><span class="badge text-bg-light border text-capitalize">{{ obj.role }}</span></td>
           <td>
             {% if obj.is_active %}<span class="badge text-bg-success">Active</span>

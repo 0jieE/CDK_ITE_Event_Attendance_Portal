@@ -114,7 +114,6 @@ class StudentProfileSerializer(serializers.Serializer):
     middle_name = serializers.CharField(source="user.middle_name", allow_null=True)
     last_name = serializers.CharField(source="user.last_name")
     username = serializers.CharField(source="user.username")
-    email = serializers.EmailField(source="user.email")
     profile_image = serializers.SerializerMethodField()
     year_level = serializers.CharField()
     year_level_display = serializers.CharField(source="get_year_level_display")
@@ -184,7 +183,6 @@ class StudentProfileUpdateSerializer(serializers.Serializer):
     )
     last_name = serializers.CharField(max_length=150, required=False)
     username = serializers.CharField(max_length=150, required=False)
-    email = serializers.EmailField(required=False, allow_blank=True)
 
     def validate_username(self, value):
         value = value.strip()

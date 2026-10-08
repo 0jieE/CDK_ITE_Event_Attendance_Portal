@@ -70,6 +70,8 @@
     .sidebar .collapse .nav, .sidebar .collapsing .nav, .sidebar .collapse > .nav { padding: .15rem 0 .35rem; }
     .sidebar .collapse .nav-link, .sidebar .collapsing .nav-link { font-size: .87rem; padding: .5rem .85rem; }
     .sidebar .nav .nav { margin-left: 1.45rem; padding-left: .6rem; border-left: 1px solid rgba(255,255,255,.12); }
+    .nav-badge { margin-left: auto; background: #ffb020; color: #2a1a00; border-radius: 999px; font-size: .7rem; font-weight: 800; line-height: 1; padding: .22rem .5rem; min-width: 1.4rem; text-align: center; }
+    .sidebar .nav-link.active .nav-badge { background: #06200a; color: #fff; }
     .sidebar-foot { margin-top: auto; padding: .85rem 1.1rem 1rem; font-size: .72rem; color: rgba(255,255,255,.45); border-top: 1px solid rgba(255,255,255,.07); white-space: nowrap; overflow: hidden; }
 
     /* ================= Content ================= */
@@ -98,6 +100,7 @@
       html[data-sidebar="collapsed"] .sidebar .nav { padding-inline: .6rem; }
       html[data-sidebar="collapsed"] .sidebar .nav-link { justify-content: center; padding-inline: 0; }
       html[data-sidebar="collapsed"] .sidebar .nav-link > span:first-child { gap: 0; }
+      html[data-sidebar="collapsed"] .sidebar .nav-badge { position: absolute; top: .15rem; right: .35rem; font-size: .6rem; padding: .15rem .35rem; min-width: 1.1rem; }
       html[data-sidebar="collapsed"] .sidebar .collapse,
       html[data-sidebar="collapsed"] .sidebar .collapsing { display: none !important; }
     }
@@ -166,6 +169,7 @@
             {% if item.url %}
               <a class="nav-link {% if active == item.key %}active{% endif %}" href="{{ item.url }}" title="{{ item.label }}">
                 <i class="bi bi-{{ item.icon }}"></i> <span class="nav-text">{{ item.label }}</span>
+                {% if item.key == 'approvals' %}<span id="navApprovalsBadge" class="nav-badge{% if not item.badge %} d-none{% endif %}">{{ item.badge }}</span>{% endif %}
               </a>
             {% else %}
               <span class="nav-link disabled"><i class="bi bi-{{ item.icon }}"></i> <span class="nav-text">{{ item.label }}</span></span>

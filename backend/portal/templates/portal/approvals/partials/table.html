@@ -1,0 +1,54 @@
+{% comment %}
+Approvals table fragment (also returned on HTMX refresh). Carries an out-of-band
+update for the sidebar badge so the pending count stays correct after an action.
+{% endcomment %}
+{% if oob %}<span id="navApprovalsBadge" hx-swap-oob="outerHTML"
+      class="nav-badge{% if not counts.PENDING %} d-none{% endif %}">{{ counts.PENDING }}</span>{% endif %}
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle datatable" id="approvalsTable" width="100%">
+    <thead>
+      <tr>
+        <th>Student</th><th>Student No.</th><th>Year &amp; Section</th><th>Username</th>
+        <th>Signed up</th>{% if status == 'REJECTED' %}<th>Reason</th>{% endif %}
+        <th class="text-end no-print">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for obj in objects %}
+        <tr>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              {% include "portal/partials/avatar.html" with u=obj.user size=40 %}
+              <span class="fw-semibold">{{ obj.user.get_full_name|default:obj.user.username }}</span>
+            </div>
+          </td>
+          <td>{{ obj.student_number }}</td>
+          <td>{{ obj.year_section|default:"—" }}</td>
+          <td>{{ obj.user.username }}</td>
+          <td data-order="{{ obj.user.date_joined|date:'U' }}">{{ obj.user.date_joined|date:"M d, Y g:i A" }}</td>
+          {% if status == 'REJECTED' %}<td class="text-muted">{{ obj.rejection_reason|default:"—" }}</td>{% endif %}
+          <td class="text-end no-print text-nowrap">
+            <button class="btn btn-sm btn-success"
+                    hx-post="{% url 'portal:approvals-approve' obj.id %}"
+                    hx-confirm="Approve {{ obj.user.get_full_name|default:obj.user.username }} ({{ obj.student_number }})? They will be able to sign in."
+                    hx-swap="none">
+              <i class="bi bi-check-lg"></i> Approve
+            </button>
+            {% if status == 'PENDING' %}
+              <button class="btn btn-sm btn-outline-danger"
+                      hx-get="{% url 'portal:approvals-reject' obj.id %}" hx-target="#modalContent" hx-swap="innerHTML">
+                <i class="bi bi-x-lg"></i> Reject
+              </button>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-5">
+          <i class="bi bi-inbox fs-3 d-block mb-1"></i>
+          {% if status == 'PENDING' %}No students are waiting for approval.{% else %}No rejected sign-ups.{% endif %}
+        </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

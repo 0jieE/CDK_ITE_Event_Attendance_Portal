@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../services/api_service.dart';
 import '../services/auth_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/state_message.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -31,6 +33,36 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthProvider>();
     await auth.login(_userCtrl.text, _passCtrl.text);
     // On success the root router swaps this screen out automatically.
+  }
+
+  Future<void> _openSignUp() async {
+    final auth = context.read<AuthProvider>()..clearError();
+    final username = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const SignUpScreen()),
+    );
+    if (!mounted || username == null || username.isEmpty) return;
+    // Registered: make signing in (once approved) a one-field job.
+    _userCtrl.text = username;
+    _passCtrl.clear();
+    auth.clearError();
+  }
+
+  /// The failed-login message, styled by what happened: waiting for approval is
+  /// good-news-pending (calm), a rejection or a wrong password is an error.
+  Widget _loginBanner(AuthProvider auth) {
+    switch (auth.errorCode) {
+      case ApiCodes.pendingApproval:
+        return const InlineBanner(
+          isError: false,
+          icon: Icons.hourglass_top,
+          message: 'Your account is waiting for approval by the Department '
+              "Adviser. You'll be able to sign in once it is approved.",
+        );
+      case ApiCodes.registrationRejected:
+        return InlineBanner(icon: Icons.block, message: auth.error!);
+      default:
+        return InlineBanner(message: auth.error!);
+    }
   }
 
   @override
@@ -124,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           if (auth.error != null) ...[
                             const SizedBox(height: 16),
-                            InlineBanner(message: auth.error!),
+                            _loginBanner(auth),
                           ],
                           const SizedBox(height: 24),
                           FilledButton(
@@ -138,6 +170,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                         color: AppTheme.onGreen),
                                   )
                                 : const Text('Sign in'),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: auth.busy ? null : _openSignUp,
+                            child: const Text('New student? Create an account'),
                           ),
                         ],
                       ),

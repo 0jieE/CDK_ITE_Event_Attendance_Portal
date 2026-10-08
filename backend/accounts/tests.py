@@ -210,7 +210,7 @@ class PortalPhotoFormTests(TestCase):
     def _student_post(self, **extra):
         data = {"student_number": "2024-9", "year_level": "1", "section": "A",
                 "username": "photo1", "first_name": "Pho", "last_name": "To",
-                "email": "p@x.ph", "password": "Str0ng-Pass-123!", "is_active": "on"}
+                "password": "Str0ng-Pass-123!", "is_active": "on"}
         data.update(extra)
         return self.client.post(reverse("portal:students-add"), data)
 

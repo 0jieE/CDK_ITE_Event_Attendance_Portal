@@ -10,6 +10,10 @@ urlpatterns = [
     path("", views.dashboard_view, name="dashboard"),
     path("login/", views.login_view, name="login"),
     path("logout/", views.logout_view, name="logout"),
+    # Student sign-up approvals
+    path("approvals/", views.approvals_view, name="approvals"),
+    path("approvals/<int:pk>/approve/", views.approval_approve_view, name="approvals-approve"),
+    path("approvals/<int:pk>/reject/", views.approval_reject_view, name="approvals-reject"),
     # Attendance logs (read-only)
     path("attendance_logs/", views.attendance_logs_view, name="attendance_logs-list"),
     # Fines

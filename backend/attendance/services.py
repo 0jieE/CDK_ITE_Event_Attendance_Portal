@@ -94,12 +94,17 @@ def compute_fines_for_event(event, as_of=None, now=None):
     # One query for every existing fine (avoids a query per student).
     existing = {f.student_id: f for f in Fine.objects.filter(event=event)}
 
-    students = list(Student.objects.all())
+    # Only approved students are enrolled: a pending/rejected sign-up is never fined.
+    students = list(Student.objects.filter(approval_status=Student.ApprovalStatus.APPROVED))
     results = {"created": 0, "updated": 0, "flagged_for_review": 0, "fines": []}
 
     for student in students:
+        # A student who signed up and was approved part-way through an event is only
+        # accountable from their approval day on (admin-created students: all days).
+        joined = timezone.localtime(student.reviewed_at).date() if student.reviewed_at else None
         missed = sum(
-            1 for (d, t) in elapsed_slots if (student.id, d, t) not in credited_keys
+            1 for (d, t) in elapsed_slots
+            if (joined is None or d >= joined) and (student.id, d, t) not in credited_keys
         )
         amount = (Decimal(missed) * fine_rate).quantize(Decimal("0.01"))
 

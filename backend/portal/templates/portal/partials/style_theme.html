@@ -183,6 +183,8 @@ there is no stale-asset caching. Everything is driven by the CSS variables below
   [data-bs-theme="dark"] .badge.text-bg-warning   { color: #fbbf24 !important; }
   [data-bs-theme="dark"] .badge.text-bg-secondary { color: #b6c2d1 !important; }
   .badge.border { border-color: transparent !important; }
+  /* count pills inside a solid (active) green button stay readable */
+  .btn-primary .badge.text-bg-light { background: rgba(255, 255, 255, .6) !important; color: var(--on-brand) !important; }
 
   /* ---------- alerts / modal / toast / dropdown ---------- */
   .alert { border-radius: .8rem; border: 1px solid transparent; }
