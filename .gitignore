@@ -12,3 +12,6 @@ Thumbs.db
 !.env.prod.example
 *.pem
 *.key
+
+# Private credentials file - never commit
+CREDENTIALS*

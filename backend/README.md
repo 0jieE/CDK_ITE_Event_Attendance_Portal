@@ -436,6 +436,23 @@ Python / Django / PostgreSQL — they are pinned as a set.
 
 ---
 
+## Demo data
+
+```bash
+python manage.py seed_demo            # 24 students, 2 instructors, 3 events, attendance, fines, sign-ups
+python manage.py seed_demo --clear    # remove exactly what it created
+```
+
+Creates clearly tagged demo accounts (`stud01`-`stud24`, `inst01`/`inst02`, password
+`Demo-Pass-2026` unless `--password` is given), three events relative to *today* (finished /
+running / upcoming), attendance for every elapsed slot, fines from the normal calculator (about
+half of the finished event paid), plus pending and rejected sign-ups for the Approvals page.
+It is repeatable (a re-run adds nothing) and never modifies existing users or events; existing
+approved students only get attendance in the *demo* events. In Docker:
+`docker compose --env-file .env.prod exec web python manage.py seed_demo`.
+
+---
+
 ## Tests
 
 ```bash
