@@ -152,3 +152,31 @@ class PortalPagesRenderTests(TestCase):
     def test_toggle_fields_render_as_switches_and_keep_their_value(self):
         res = self.client.get(reverse("portal:events-add"))
         self.assertIn('class="form-check form-switch', res.content.decode())
+
+
+class AdminLinkTests(TestCase):
+    """The adviser menu links to Django Administration - for staff accounts only."""
+
+    def _menu(self, user):
+        self.client.force_login(user)
+        return self.client.get(reverse("portal:dashboard")).content.decode()
+
+    def test_staff_adviser_sees_the_link_to_the_django_admin(self):
+        adv = get_user_model().objects.create_user("adv", password="x", is_admin=True, is_staff=True)
+        html = self._menu(adv)
+        self.assertIn('href="/admin/"', html)
+        self.assertIn("Django Administration", html)
+        self.assertIn('target="_blank"', html)
+
+    def test_adviser_without_staff_does_not_get_a_dead_end_link(self):
+        adv = get_user_model().objects.create_user("adv2", password="x", is_admin=True, is_staff=False)
+        html = self._menu(adv)
+        self.assertNotIn("Django Administration", html)
+        self.assertNotIn('href="/admin/"', html)
+
+    def test_link_target_actually_loads_for_a_superuser(self):
+        su = get_user_model().objects.create_superuser("root", password="x")
+        su.is_admin = True
+        su.save()
+        self.client.force_login(su)
+        self.assertEqual(self.client.get("/admin/").status_code, 200)

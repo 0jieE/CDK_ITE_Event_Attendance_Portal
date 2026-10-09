@@ -202,6 +202,11 @@
           <li><span class="dropdown-item-text small text-muted">Signed in as <strong class="text-body">{{ request.user.username }}</strong><br>Department Adviser</span></li>
           <li><hr class="dropdown-divider"></li>
           <li><a class="dropdown-item" href="{% url 'portal:settings' %}"><i class="bi bi-gear me-2"></i>Settings</a></li>
+          {% if request.user.is_staff %}
+            {# Django's built-in admin (developer/superuser tool) - only for accounts that can sign in to it. #}
+            <li><a class="dropdown-item" href="{% url 'admin:index' %}" target="_blank" rel="noopener"><i class="bi bi-shield-lock me-2"></i>Django Administration <i class="bi bi-box-arrow-up-right ms-1 small text-muted"></i></a></li>
+          {% endif %}
+          <li><hr class="dropdown-divider"></li>
           <li><a class="dropdown-item" href="{% url 'portal:logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
         </ul>
       </div>
