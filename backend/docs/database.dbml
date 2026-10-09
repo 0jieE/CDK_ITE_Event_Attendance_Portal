@@ -1,0 +1,295 @@
+// =============================================================================
+// Hybrid QR-Code Based Attendance and Financial Management System
+// ITE Department, Colegio de Kidapawan  -  PostgreSQL data schema (DBML)
+//
+// HOW TO USE: open https://dbdiagram.io/d  ->  paste this whole file into the
+// editor on the left (or Import > "DBML"). The diagram renders on the right.
+//
+// Generated from the Django models (accounts, attendance, portal + the JWT
+// blacklist tables). Django's own session / permission tables are omitted.
+// =============================================================================
+
+Project qr_attendance {
+  database_type: 'PostgreSQL'
+  Note: '''
+    **QR Attendance & Financial Management** - data schema.
+
+    * Sign-in is username + password only (there is NO email column).
+    * One QR code per student per event-day; the slot (AM_IN / AM_OUT / PM_IN / PM_OUT)
+      is decided by the server at scan time from the event's time windows.
+    * Fines are a ledger: missed required slots x event.fine_rate, one row per student+event.
+    * Images (profile photos, QR PNGs, portal logo) live on Cloudinary; the DB stores the path.
+  '''
+}
+
+// ----------------------------------------------------------------- enums ---
+Enum approval_status {
+  PENDING  [note: 'Self-registered, waiting for the Department Adviser']
+  APPROVED [note: 'Can sign in (also the default for adviser-created students)']
+  REJECTED [note: 'Denied; account stays inactive (reason is stored)']
+}
+
+Enum year_level {
+  "1" [note: '1st Year']
+  "2" [note: '2nd Year']
+  "3" [note: '3rd Year']
+  "4" [note: '4th Year']
+}
+
+Enum semester_name {
+  "1st"
+  "2nd"
+  "Summer"
+}
+
+Enum attendance_type {
+  AM_IN  [note: 'AM Time-In']
+  AM_OUT [note: 'AM Time-Out']
+  PM_IN  [note: 'PM Time-In']
+  PM_OUT [note: 'PM Time-Out']
+}
+
+Enum attendance_status {
+  PRESENT [note: 'Scanned inside the slot window']
+  LATE    [note: 'Reserved - not produced today (in-window = PRESENT)']
+  ABSENT  [note: 'No scan; derived, normally no row is stored']
+}
+
+Enum fine_status {
+  UNPAID
+  PAID [note: 'Cash handed to the treasurer (ledger only, no payment gateway)']
+}
+
+Enum portal_theme {
+  brand   [note: 'ITE Brand Green #41b422 (default)']
+  violet
+  green
+  blue
+  teal
+  crimson
+  slate
+}
+
+Enum color_mode {
+  light
+  dark
+}
+
+// ------------------------------------------------------- identity & roles ---
+Table accounts_user [headercolor: #41b422] {
+  id            bigint        [pk, increment]
+  username      varchar(150)  [not null, unique, note: 'Sign-in name']
+  password      varchar(128)  [not null, note: 'Salted PBKDF2 hash']
+  first_name    varchar(150)  [not null, default: '']
+  middle_name   varchar(150)  [null]
+  last_name     varchar(150)  [not null, default: '']
+  profile_image varchar(100)  [null, note: 'Cloudinary path, e.g. profiles/<random>.jpg']
+  is_admin      boolean       [not null, default: false, note: 'Department Adviser - full control']
+  is_instructor boolean       [not null, default: false, note: 'Scans attendance in the mobile app']
+  is_student    boolean       [not null, default: false, note: 'Views own data in the mobile app']
+  is_active     boolean       [not null, default: true, note: 'False = cannot sign in (e.g. pending sign-up)']
+  is_staff      boolean       [not null, default: false, note: 'May open Django Administration']
+  is_superuser  boolean       [not null, default: false]
+  last_login    timestamptz   [null]
+  date_joined   timestamptz   [not null]
+
+  Note: 'One table for every person. Roles are boolean flags, so a person can hold more than one.'
+}
+
+Table accounts_instructor [headercolor: #41b422] {
+  id      bigint [pk, increment]
+  user_id bigint [not null, unique, note: '1:1 with accounts_user']
+
+  Note: 'Profile row for a user who scans attendance.'
+}
+
+Table accounts_student [headercolor: #41b422] {
+  id               bigint          [pk, increment]
+  user_id          bigint          [not null, unique, note: '1:1 with accounts_user']
+  student_number   varchar(50)     [not null, unique]
+  year_level       year_level      [not null, default: '', note: 'Blank until set']
+  section          varchar(20)     [not null, default: '']
+  approval_status  approval_status [not null, default: 'APPROVED']
+  reviewed_at      timestamptz     [null, note: 'When the adviser approved/rejected; also the day fines start counting for late joiners']
+  reviewed_by_id   bigint          [null, note: 'Adviser who decided']
+  rejection_reason varchar(255)    [not null, default: '']
+
+  indexes {
+    approval_status
+  }
+
+  Note: 'Student profile. Self-registered students start PENDING with an inactive user.'
+}
+
+// ------------------------------------------------- school year & events ---
+Table attendance_schoolyear [headercolor: #2b8416] {
+  id bigint     [pk, increment]
+  sy varchar(9) [not null, unique, note: 'e.g. 2026-2027']
+}
+
+Table attendance_semester [headercolor: #2b8416] {
+  id             bigint        [pk, increment]
+  school_year_id bigint        [not null]
+  name           semester_name [not null]
+
+  indexes {
+    (school_year_id, name) [unique]
+  }
+}
+
+Table attendance_event [headercolor: #2b8416] {
+  id             bigint        [pk, increment]
+  name           varchar(255)  [not null]
+  semester_id    bigint        [not null]
+  start_date     date          [not null]
+  end_date       date          [not null, note: 'Multi-day events: start_date..end_date']
+  fine_rate      decimal(10,2) [not null, default: 0, note: 'Charged per missed required slot']
+  required_types jsonb         [not null, default: '["AM_IN","AM_OUT","PM_IN","PM_OUT"]', note: 'List of attendance_type values that are mandatory']
+  is_active      boolean       [not null, default: true]
+  am_in_start    time          [null, note: 'Scan windows - the same times apply to every day of the event']
+  am_in_end      time          [null]
+  am_out_start   time          [null]
+  am_out_end     time          [null]
+  pm_in_start    time          [null]
+  pm_in_end      time          [null]
+  pm_out_start   time          [null]
+  pm_out_end     time          [null]
+
+  Note: 'A (possibly multi-day) event. Every required slot must have a start/end window.'
+}
+
+// ---------------------------------------------------- QR & attendance ---
+Table attendance_qrcode [headercolor: #379c1c] {
+  id         bigint       [pk, increment]
+  student_id bigint       [not null]
+  event_id   bigint       [not null]
+  date       date         [not null, note: 'The event-day this QR is valid for (today only)']
+  token      varchar(64)  [not null, unique, note: 'secrets.token_urlsafe(32) - 256 bits, resolved server-side only']
+  image      varchar(100) [null, note: 'Cloudinary path of the QR PNG']
+  created_at timestamptz  [not null]
+
+  indexes {
+    (student_id, event_id, date) [unique, note: 'One QR per student per event-day']
+  }
+}
+
+Table attendance_attendancelog [headercolor: #379c1c] {
+  id              bigint            [pk, increment]
+  student_id      bigint            [not null]
+  event_id        bigint            [not null]
+  date            date              [not null]
+  attendance_type attendance_type   [not null]
+  status          attendance_status [not null, default: 'ABSENT']
+  scanned_at      timestamptz       [null, note: 'Server clock at scan time']
+  scanned_by_id   bigint            [null, note: 'Instructor who scanned (accountability)']
+
+  indexes {
+    (student_id, event_id, date, attendance_type) [unique, note: 'One log per student/event/day/slot']
+  }
+}
+
+// ------------------------------------------------------------- finance ---
+Table attendance_fine [headercolor: #f5b301] {
+  id             bigint        [pk, increment]
+  student_id     bigint        [not null]
+  event_id       bigint        [not null]
+  amount         decimal(10,2) [not null, default: 0, note: 'missed_slots x event.fine_rate']
+  missed_slots   int           [not null, default: 0]
+  status         fine_status   [not null, default: 'UNPAID']
+  paid_at        timestamptz   [null]
+  recorded_by_id bigint        [null, note: 'Adviser who recorded the cash payment']
+  needs_review   boolean       [not null, default: false, note: 'A recompute disagreed with an already-PAID fine']
+  created_at     timestamptz   [not null]
+  updated_at     timestamptz   [not null]
+
+  indexes {
+    (student_id, event_id) [unique, note: 'One fine ledger entry per student per event']
+  }
+
+  Note: 'Ledger only. Computed by the fines calculator from required slots that have elapsed and have no PRESENT/LATE scan.'
+}
+
+// -------------------------------------------------------------- portal ---
+Table portal_portalsettings [headercolor: #64748b] {
+  id              bigint       [pk, note: 'Singleton: always id = 1']
+  brand_title     varchar(80)  [not null, default: 'ITE Attendance']
+  brand_subtitle  varchar(120) [not null, default: 'Department Adviser Portal']
+  theme           portal_theme [not null, default: 'brand']
+  color_mode      color_mode   [not null, default: 'light']
+  logo            varchar(100) [null, note: 'Cloudinary path of the uploaded logo']
+  compact_sidebar boolean      [not null, default: false, note: 'Start with the sidebar collapsed']
+  updated_at      timestamptz  [not null]
+
+  Note: 'Single-row table with the admin portal appearance and branding.'
+}
+
+// ------------------------------------------------------- JWT blacklist ---
+// django-rest-framework-simplejwt "token_blacklist": refresh tokens are rotated and the
+// old one is blacklisted, so a stolen refresh token is single-use.
+Table token_blacklist_outstandingtoken [headercolor: #64748b] {
+  id         bigint       [pk, increment]
+  user_id    bigint       [null]
+  jti        varchar(255) [not null, unique]
+  token      text         [not null]
+  created_at timestamptz  [null]
+  expires_at timestamptz  [not null]
+}
+
+Table token_blacklist_blacklistedtoken [headercolor: #64748b] {
+  id             bigint      [pk, increment]
+  token_id       bigint      [not null, unique]
+  blacklisted_at timestamptz [not null]
+}
+
+// ---------------------------------------------------------- relationships ---
+// (one-to-one)  -
+Ref: accounts_instructor.user_id - accounts_user.id [delete: cascade]
+Ref: accounts_student.user_id    - accounts_user.id [delete: cascade]
+
+// (many-to-one)  >
+Ref: accounts_student.reviewed_by_id > accounts_user.id [delete: set null]
+
+Ref: attendance_semester.school_year_id > attendance_schoolyear.id [delete: cascade]
+Ref: attendance_event.semester_id       > attendance_semester.id   [delete: cascade]
+
+Ref: attendance_qrcode.student_id > accounts_student.id [delete: cascade]
+Ref: attendance_qrcode.event_id   > attendance_event.id [delete: cascade]
+
+Ref: attendance_attendancelog.student_id    > accounts_student.id    [delete: cascade]
+Ref: attendance_attendancelog.event_id      > attendance_event.id    [delete: cascade]
+Ref: attendance_attendancelog.scanned_by_id > accounts_instructor.id [delete: set null]
+
+Ref: attendance_fine.student_id     > accounts_student.id [delete: cascade]
+Ref: attendance_fine.event_id       > attendance_event.id [delete: cascade]
+Ref: attendance_fine.recorded_by_id > accounts_user.id    [delete: set null]
+
+Ref: token_blacklist_outstandingtoken.user_id    > accounts_user.id [delete: set null]
+Ref: token_blacklist_blacklistedtoken.token_id   - token_blacklist_outstandingtoken.id [delete: cascade]
+
+// ------------------------------------------------------------- grouping ---
+TableGroup identity_and_roles {
+  accounts_user
+  accounts_instructor
+  accounts_student
+}
+
+TableGroup events_and_calendar {
+  attendance_schoolyear
+  attendance_semester
+  attendance_event
+}
+
+TableGroup qr_and_attendance {
+  attendance_qrcode
+  attendance_attendancelog
+}
+
+TableGroup finance {
+  attendance_fine
+}
+
+TableGroup system {
+  portal_portalsettings
+  token_blacklist_outstandingtoken
+  token_blacklist_blacklistedtoken
+}

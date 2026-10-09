@@ -180,3 +180,20 @@ class AdminLinkTests(TestCase):
         su.save()
         self.client.force_login(su)
         self.assertEqual(self.client.get("/admin/").status_code, 200)
+
+
+class SchemaLinkTests(TestCase):
+    """The adviser menu links to the dbdiagram.io schema, opening safely in a new tab."""
+
+    URL = "https://dbdiagram.io/d/Digital_clearance-69a0ec45a3f0aa31e13ec0e1"
+
+    def test_menu_has_the_schema_link_for_every_adviser(self):
+        for name, staff in (("a1", True), ("a2", False)):
+            adv = get_user_model().objects.create_user(name, password="x", is_admin=True, is_staff=staff)
+            self.client.force_login(adv)
+            html = self.client.get(reverse("portal:dashboard")).content.decode()
+            self.assertIn(f'href="{self.URL}"', html, name)
+            self.assertIn("Database Schema", html)
+            link = html[html.index(self.URL) - 20: html.index(self.URL) + 200]
+            self.assertIn('target="_blank"', link)
+            self.assertIn('rel="noopener noreferrer"', link)
