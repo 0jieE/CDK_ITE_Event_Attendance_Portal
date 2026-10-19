@@ -37,13 +37,11 @@ class SeedDemoTests(TestCase):
         out = run("--students", "10")
         self.assertIn("Demo data ready", out)
         self.assertEqual(Student.objects.filter(student_number__startswith="DEMO-0").count(), 10)
-        self.assertEqual(Student.objects.filter(approval_status="PENDING").count(), 3)
-        self.assertEqual(Student.objects.filter(approval_status="REJECTED").count(), 1)
+        self.assertFalse(User.objects.filter(username__in=["pending01", "rejected01"]).exists())   # no sign-up demo
         self.assertEqual(Instructor.objects.count(), 2)
         self.assertEqual(Event.objects.filter(name__in=["Intramurals 2026", "ITE Tech Week 2026",
                                                         "Foundation Day 2026"]).count(), 3)
-        # pending / rejected demo accounts can't sign in; approved ones can
-        self.assertFalse(User.objects.get(username="pending01").is_active)
+        # demo accounts can sign in
         self.assertTrue(User.objects.get(username="stud01").check_password("Demo-Pass-2026"))
         self.assertTrue(User.objects.get(username="stud01").is_active)
         self.assertTrue(AttendanceLog.objects.exists() and Fine.objects.exists())
@@ -89,7 +87,7 @@ class SeedDemoTests(TestCase):
         out = run("--clear")
         self.assertIn("Removed", out)
         self.assertFalse(Student.objects.filter(student_number__startswith="DEMO-").exists())
-        self.assertFalse(User.objects.filter(username__in=["stud01", "inst01", "pending01", "rejected01"]).exists())
+        self.assertFalse(User.objects.filter(username__in=["stud01", "inst01"]).exists())
         self.assertFalse(Event.objects.filter(name__in=["Intramurals 2026", "ITE Tech Week 2026",
                                                         "Foundation Day 2026"]).exists())
         # real data untouched

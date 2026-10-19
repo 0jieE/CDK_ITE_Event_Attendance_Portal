@@ -70,8 +70,6 @@
     .sidebar .collapse .nav, .sidebar .collapsing .nav, .sidebar .collapse > .nav { padding: .15rem 0 .35rem; }
     .sidebar .collapse .nav-link, .sidebar .collapsing .nav-link { font-size: .87rem; padding: .5rem .85rem; }
     .sidebar .nav .nav { margin-left: 1.45rem; padding-left: .6rem; border-left: 1px solid rgba(255,255,255,.12); }
-    .nav-badge { margin-left: auto; background: #ffb020; color: #2a1a00; border-radius: 999px; font-size: .7rem; font-weight: 800; line-height: 1; padding: .22rem .5rem; min-width: 1.4rem; text-align: center; }
-    .sidebar .nav-link.active .nav-badge { background: #06200a; color: #fff; }
     .sidebar-foot { margin-top: auto; padding: .85rem 1.1rem 1rem; font-size: .72rem; color: rgba(255,255,255,.45); border-top: 1px solid rgba(255,255,255,.07); white-space: nowrap; overflow: hidden; }
 
     /* ================= Content ================= */
@@ -100,7 +98,6 @@
       html[data-sidebar="collapsed"] .sidebar .nav { padding-inline: .6rem; }
       html[data-sidebar="collapsed"] .sidebar .nav-link { justify-content: center; padding-inline: 0; }
       html[data-sidebar="collapsed"] .sidebar .nav-link > span:first-child { gap: 0; }
-      html[data-sidebar="collapsed"] .sidebar .nav-badge { position: absolute; top: .15rem; right: .35rem; font-size: .6rem; padding: .15rem .35rem; min-width: 1.1rem; }
       html[data-sidebar="collapsed"] .sidebar .collapse,
       html[data-sidebar="collapsed"] .sidebar .collapsing { display: none !important; }
     }
@@ -169,7 +166,6 @@
             {% if item.url %}
               <a class="nav-link {% if active == item.key %}active{% endif %}" href="{{ item.url }}" title="{{ item.label }}">
                 <i class="bi bi-{{ item.icon }}"></i> <span class="nav-text">{{ item.label }}</span>
-                {% if item.key == 'approvals' %}<span id="navApprovalsBadge" class="nav-badge{% if not item.badge %} d-none{% endif %}">{{ item.badge }}</span>{% endif %}
               </a>
             {% else %}
               <span class="nav-link disabled"><i class="bi bi-{{ item.icon }}"></i> <span class="nav-text">{{ item.label }}</span></span>
@@ -199,7 +195,7 @@
           <span class="d-none d-sm-inline">{{ request.user.get_full_name|default:request.user.username }}</span>
         </a>
         <ul class="dropdown-menu dropdown-menu-end">
-          <li><span class="dropdown-item-text small text-muted">Signed in as <strong class="text-body">{{ request.user.username }}</strong><br>Department Adviser</span></li>
+          <li><span class="dropdown-item-text small text-muted">Signed in as <strong class="text-body">{{ request.user.username }}</strong><br>{% if request.user.is_superuser %}Super Admin{% else %}Department Adviser{% endif %}</span></li>
           <li><hr class="dropdown-divider"></li>
           <li><a class="dropdown-item" href="{% url 'portal:settings' %}"><i class="bi bi-gear me-2"></i>Settings</a></li>
           {% if request.user.is_staff %}
@@ -313,6 +309,47 @@
     });
     document.addEventListener('DOMContentLoaded', function () { syncScanWindows(document); });
 
+    // ---------------------------------------------------------------------
+    // Event form: one optional fine input per day when the event spans days.
+    // Inputs are named day_fine__YYYY-MM-DD; blank = use the default rate.
+    // ---------------------------------------------------------------------
+    function syncDayFines(scope) {
+      var root = scope && scope.querySelectorAll ? scope : document;
+      var forms = root.matches && root.matches('form') ? [root] : Array.prototype.slice.call(root.querySelectorAll('form'));
+      forms.forEach(function (form) {
+        var box = form.querySelector('.day-fines');
+        var start = form.querySelector('input[name="start_date"]');
+        var end = form.querySelector('input[name="end_date"]');
+        if (!box || !start || !end) return;
+        var list = box.querySelector('.day-fines-list');
+        var keep = {};
+        try { keep = JSON.parse(box.getAttribute('data-existing') || '{}'); } catch (e) {}
+        list.querySelectorAll('input').forEach(function (i) { keep[i.name.replace('day_fine__', '')] = i.value; });
+        var s = Date.parse(start.value), e = Date.parse(end.value), MAXD = 62, DAY = 86400000;
+        var days = [];
+        if (!isNaN(s) && !isNaN(e) && e > s) {
+          for (var t = s; t <= e && days.length < MAXD; t += DAY) days.push(new Date(t));
+        }
+        list.innerHTML = '';
+        days.forEach(function (d) {
+          var iso = d.toISOString().slice(0, 10);
+          var col = document.createElement('div'); col.className = 'col-6 col-md-4';
+          var lab = document.createElement('label'); lab.className = 'form-label small mb-1';
+          lab.textContent = d.toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC'});
+          var inp = document.createElement('input');
+          inp.type = 'number'; inp.step = '0.01'; inp.min = '0'; inp.className = 'form-control form-control-sm';
+          inp.name = 'day_fine__' + iso; inp.placeholder = 'default';
+          if (keep[iso]) inp.value = keep[iso];
+          col.appendChild(lab); col.appendChild(inp); list.appendChild(col);
+        });
+        box.hidden = days.length === 0;
+      });
+    }
+    document.addEventListener('change', function (e) {
+      if (e.target && (e.target.name === 'start_date' || e.target.name === 'end_date')) syncDayFines(e.target.form || document);
+    });
+    document.addEventListener('DOMContentLoaded', function () { syncDayFines(document); });
+
     // Bootstrap modal instance for HTMX-loaded forms.
     const appModal = new bootstrap.Modal(document.getElementById('appModal'));
 
@@ -344,6 +381,23 @@
 
     document.addEventListener('DOMContentLoaded', function () { initDataTables(document); });
 
+    // Printing must include every row, not just the visible DataTables page.
+    var _printState = [];
+    window.addEventListener('beforeprint', function () {
+      _printState = [];
+      document.querySelectorAll('table.datatable').forEach(function (tbl) {
+        if ($.fn.dataTable.isDataTable(tbl)) {
+          var dt = $(tbl).DataTable();
+          _printState.push([dt, dt.page.len()]);
+          dt.page.len(-1).draw(false);
+        }
+      });
+    });
+    window.addEventListener('afterprint', function () {
+      _printState.forEach(function (s) { s[0].page.len(s[1]).draw(false); });
+      _printState = [];
+    });
+
     document.body.addEventListener('htmx:beforeSwap', function (e) {
       destroyDataTables(e.detail.target);
     });
@@ -356,6 +410,7 @@
       }
       initDataTables(e.detail.target);
       syncScanWindows(e.detail.target);
+      syncDayFines(e.detail.target);
     });
 
     // HX-Trigger: closeModal

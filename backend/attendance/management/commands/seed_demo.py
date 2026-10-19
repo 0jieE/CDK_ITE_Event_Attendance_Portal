@@ -5,15 +5,14 @@
 
 What it creates (all clearly tagged, so ``--clear`` can remove exactly it):
 
-* 2 instructors (``inst01``, ``inst02``) and ``--students`` approved students
+* 2 instructors (``inst01``, ``inst02``) and ``--students`` students
   (``stud01`` ...; student numbers ``DEMO-001`` ...) across 1st-4th year, sections A/B
-* 3 pending sign-ups (``pending01``-``03``) and 1 rejected one, for the Approvals page
 * 3 events relative to *today*: a finished one, one running now, one upcoming
   ("Intramurals 2026", "ITE Tech Week 2026", "Foundation Day 2026")
 * attendance logs for every elapsed slot of those events **and of any existing
-  event** (every approved student is enrolled in every event, so the demo students
+  event** (every student is enrolled in every event, so the demo students
   get realistic history there too instead of looking absent everywhere). Existing
-  approved students also get attendance in the *demo* events (never in real ones)
+  students also get attendance in the *demo* events (never in real ones)
 * fines computed with the normal calculator, about half of the finished event's paid
 
 It never modifies or deletes your existing users, events or logs. Safe to re-run:
@@ -31,15 +30,13 @@ from django.utils import timezone
 
 from accounts.models import Instructor, Student, User
 from attendance import services
-from attendance.models import AttendanceLog, Event, Fine, SchoolYear, Semester
+from attendance.models import AttendanceLog, Event, EventDayFine, Fine, SchoolYear, Semester
 
 DEFAULT_PASSWORD = "Demo-Pass-2026"
 STUDENT_PREFIX = "DEMO-"
 INSTRUCTORS = [("inst01", "Ramon", "Villanueva"), ("inst02", "Cecilia", "Bautista")]
-PENDING = [("pending01", "Carlo", "Navarro", "DEMO-P01", "1", "A"),
-           ("pending02", "Bea", "Fernandez", "DEMO-P02", "2", "B"),
-           ("pending03", "Jon", "Ramos", "DEMO-P03", "3", "A")]
-REJECTED = ("rejected01", "Rica", "Dela Pena", "DEMO-R01", "1", "B", "Student number not found in the class list")
+#: Accounts created by older versions of this command (sign-up demo); --clear still removes them.
+LEGACY_USERNAMES = ["pending01", "pending02", "pending03", "rejected01"]
 FIRST = ["Maria", "Juan", "Ana", "Mark", "Liza", "Paolo", "Angela", "Joshua", "Kristine", "Miguel",
          "Jasmine", "Rafael", "Camille", "Daniel", "Patricia", "Gabriel", "Nicole", "Adrian",
          "Bianca", "Carlos", "Denise", "Ethan", "Faith", "Gerald", "Hannah", "Ivan", "Julia", "Kevin"]
@@ -77,7 +74,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--clear", action="store_true", help="Remove all demo data created by this command.")
-        parser.add_argument("--students", type=int, default=24, help="How many approved demo students (default 24).")
+        parser.add_argument("--students", type=int, default=24, help="How many demo students (default 24).")
         parser.add_argument("--password", default=DEFAULT_PASSWORD, help=f"Password for demo accounts (default {DEFAULT_PASSWORD}).")
 
     # ------------------------------------------------------------------ clear
@@ -87,7 +84,7 @@ class Command(BaseCommand):
         events = Event.objects.filter(name__in=names)
         n_ev = events.count()
         events.delete()                                    # cascades logs / fines / QR codes
-        usernames = [u[0] for u in INSTRUCTORS] + [p[0] for p in PENDING] + [REJECTED[0]]
+        usernames = [u[0] for u in INSTRUCTORS] + LEGACY_USERNAMES
         ids = list(User.objects.filter(
             Q(username__in=usernames) | Q(student_profile__student_number__startswith=STUDENT_PREFIX)
         ).values_list("pk", flat=True).distinct())
@@ -103,18 +100,12 @@ class Command(BaseCommand):
         )
         return user, created
 
-    def _student(self, number, username, first, last, year, section, pwd_hash, status, active, adviser, reason=""):
-        user, _ = self._user(username, first, last, pwd_hash, is_student=True, is_active=active)
-        student, created = Student.objects.get_or_create(
+    def _student(self, number, username, first, last, year, section, pwd_hash):
+        user, _ = self._user(username, first, last, pwd_hash, is_student=True)
+        student, _ = Student.objects.get_or_create(
             student_number=number,
-            defaults=dict(user=user, year_level=year, section=section, approval_status=status),
+            defaults=dict(user=user, year_level=year, section=section),
         )
-        if created and status != Student.ApprovalStatus.PENDING:
-            # approved/rejected ~30 days ago: accountable for the whole demo period
-            student.reviewed_at = timezone.now() - datetime.timedelta(days=30)
-            student.reviewed_by = adviser
-            student.rejection_reason = reason
-            student.save(update_fields=["reviewed_at", "reviewed_by", "rejection_reason"])
         return student
 
     # ------------------------------------------------------------------ handle
@@ -139,39 +130,33 @@ class Command(BaseCommand):
                 user, _ = self._user(username, first, last, pwd_hash, is_instructor=True)
                 instructors.append(Instructor.objects.get_or_create(user=user)[0])
 
-            # ---- approved students ------------------------------------------------
+            # ---- students ---------------------------------------------------------
             students, habits = [], {}
             for i in range(1, opts["students"] + 1):
                 first, last = FIRST[(i * 7) % len(FIRST)], LAST[(i * 11) % len(LAST)]
                 st = self._student(
                     f"{STUDENT_PREFIX}{i:03d}", f"stud{i:02d}", first, last,
-                    str(1 + (i - 1) % 4), "A" if i % 3 else "B", pwd_hash,
-                    Student.ApprovalStatus.APPROVED, True, adviser)
+                    str(1 + (i - 1) % 4), "A" if i % 3 else "B", pwd_hash)
                 students.append(st)
                 habits[st.pk] = rng.choice([0.97, 0.92, 0.88, 0.82, 0.75, 0.66, 0.55])
-
-            # ---- pending / rejected sign-ups (for the Approvals page) ---------------
-            for username, first, last, number, year, section in PENDING:
-                self._student(number, username, first, last, year, section, pwd_hash,
-                              Student.ApprovalStatus.PENDING, False, adviser)
-            u, f, l, number, year, section, reason = REJECTED
-            self._student(number, u, f, l, year, section, pwd_hash, Student.ApprovalStatus.REJECTED, False, adviser, reason)
 
             # ---- events -------------------------------------------------------------
             events = []
             for spec in demo_events(today):
                 name = spec.pop("name")
-                ev, _ = Event.objects.get_or_create(name=name, defaults=dict(semester=sem, is_active=True, **spec))
+                ev, made = Event.objects.get_or_create(name=name, defaults=dict(semester=sem, is_active=True, **spec))
+                if made and name == "ITE Tech Week 2026":
+                    # Demo of per-day fines: the opening day costs more than the default rate.
+                    EventDayFine.objects.create(event=ev, date=ev.start_date, fine_rate=50)
                 events.append(ev)
             # also give the demo students history in any other existing event
             demo_names = {e.name for e in events}
             events += list(Event.objects.exclude(name__in=demo_names).filter(start_date__lte=today))
 
-            # Every approved student is enrolled in every event, so existing (non-demo)
-            # approved students would be fined for the new demo events with no history.
+            # Every student is enrolled in every event, so existing (non-demo)
+            # students would be fined for the new demo events with no history.
             # Give them plausible attendance in the DEMO events only (not in real ones).
-            others = list(Student.objects.filter(approval_status=Student.ApprovalStatus.APPROVED)
-                          .exclude(student_number__startswith=STUDENT_PREFIX))
+            others = list(Student.objects.exclude(student_number__startswith=STUDENT_PREFIX))
             for st in others:
                 habits[st.pk] = 0.9
 
@@ -229,7 +214,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(
             f"Demo data ready: {len(students)} students, {len(instructors)} instructors, "
-            f"{len(PENDING)} pending + 1 rejected sign-up, {len(events)} events, "
+            f"{len(events)} events, "
             f"{created_logs} attendance logs added, {paid} fines marked paid."))
         self.stdout.write(f"All demo accounts use the password: {opts['password']}")
         self.stdout.write("Logins: stud01..stud%02d (students), inst01 / inst02 (instructors). Remove with: seed_demo --clear" % opts["students"])

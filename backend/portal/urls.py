@@ -10,10 +10,6 @@ urlpatterns = [
     path("", views.dashboard_view, name="dashboard"),
     path("login/", views.login_view, name="login"),
     path("logout/", views.logout_view, name="logout"),
-    # Student sign-up approvals
-    path("approvals/", views.approvals_view, name="approvals"),
-    path("approvals/<int:pk>/approve/", views.approval_approve_view, name="approvals-approve"),
-    path("approvals/<int:pk>/reject/", views.approval_reject_view, name="approvals-reject"),
     # Attendance logs (read-only)
     path("attendance_logs/", views.attendance_logs_view, name="attendance_logs-list"),
     # Fines
@@ -23,6 +19,13 @@ urlpatterns = [
     # Reports
     path("reports/attendance/", views.report_attendance_view, name="reports-attendance"),
     path("reports/financial/", views.report_financial_view, name="reports-financial"),
+    # Student masterlist import + printable credentials (before the CRUD routes)
+    path("students/import/", views.students_import_view, name="students-import"),
+    path("students/import/template/<str:fmt>/", views.students_import_template_view,
+         name="students-import-template"),
+    path("students/credentials/", views.students_credentials_view, name="students-credentials"),
+    path("students/credentials/reset/", views.students_credentials_reset_view,
+         name="students-credentials-reset"),
     # Settings
     path("settings/", views.settings_view, name="settings"),
 ]

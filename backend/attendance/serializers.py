@@ -1,5 +1,6 @@
 """Serializers for the attendance & finance domain."""
 
+from django.db import transaction
 from rest_framework import serializers
 
 from accounts.models import Student
@@ -44,6 +45,12 @@ class SemesterSerializer(serializers.ModelSerializer):
 
 class EventSerializer(serializers.ModelSerializer):
     semester_label = serializers.CharField(source="semester.__str__", read_only=True)
+    #: ``{"2026-03-02": "50.00"}`` - days whose fine differs from ``fine_rate``.
+    day_fines = serializers.DictField(
+        child=serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0),
+        required=False,
+        source="day_rates",
+    )
 
     class Meta:
         model = Event
@@ -55,6 +62,7 @@ class EventSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "fine_rate",
+            "day_fines",
             "required_types",
             "is_active",
             "am_in_start", "am_in_end",
@@ -84,7 +92,49 @@ class EventSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"end_date": "End date must be on or after the start date."}
             )
+        rates = attrs.get("day_rates")
+        if rates:
+            import datetime
+
+            parsed = {}
+            for key, value in rates.items():
+                try:
+                    day = datetime.date.fromisoformat(key)
+                except ValueError:
+                    raise serializers.ValidationError({"day_fines": f"'{key}' is not a YYYY-MM-DD date."})
+                if start and end and not (start <= day <= end):
+                    raise serializers.ValidationError(
+                        {"day_fines": f"{key} is outside the event's dates."}
+                    )
+                parsed[day] = value
+            attrs["day_rates"] = parsed
         return attrs
+
+    @staticmethod
+    def _save_day_rates(event, rates):
+        from .models import EventDayFine
+
+        EventDayFine.objects.filter(event=event).delete()
+        EventDayFine.objects.bulk_create(
+            EventDayFine(event=event, date=day, fine_rate=rate)
+            for day, rate in rates.items() if rate != event.fine_rate
+        )
+
+    @transaction.atomic
+    def create(self, validated_data):
+        rates = validated_data.pop("day_rates", None)
+        event = super().create(validated_data)
+        if rates:
+            self._save_day_rates(event, rates)
+        return event
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        rates = validated_data.pop("day_rates", None)
+        event = super().update(instance, validated_data)
+        if rates is not None:
+            self._save_day_rates(event, rates)
+        return event
 
 
 class AttendanceLogSerializer(serializers.ModelSerializer):

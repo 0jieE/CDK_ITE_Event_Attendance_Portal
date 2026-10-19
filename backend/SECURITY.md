@@ -44,17 +44,17 @@ Related accepted trade-offs:
 | **Secrets** | `.env`, `.env.*` (except `*.example`) and TLS keys are gitignored and excluded from the Docker image. The admin account is created once from `ADMIN_PASSWORD`; the well-known development password is refused in production. |
 | **Container** | Django runs as an unprivileged user; the database is not published to the host; Gunicorn is reachable only through nginx. |
 
-## Student self-registration
+## Student accounts and roles
 
-- `POST /api/auth/register/` is public by design but **harmless until approved**: the account is
-  created inactive (`is_active=False`, status `PENDING`), can't sign in, receive tokens or reach any
-  endpoint, and can never be given an admin/instructor/staff role through sign-up.
-- Abuse limits: rate-limited per client IP (`THROTTLE_REGISTER`, 5/hour), Django password
-  validators, username / student-number uniqueness, validated photo uploads.
-- The adviser decides: approval is the only way to activate a sign-up (editing a pending student in
-  the portal cannot activate it). Pending/rejected students are excluded from fines.
-- Login hints are limited: only someone who supplies the **correct** password is told the account is
-  pending/rejected; wrong credentials get the same generic 401, so usernames can't be probed.
+- There is **no public sign-up**: `POST /api/auth/register/` no longer exists. Only the Department
+  Adviser creates students (one by one or by importing a CSV/Excel masterlist) and hands out the
+  generated passwords, which are shown once on the printable slips and stored only as hashes.
+- Imported passwords are random (8 characters, no look-alike characters) and use a lighter PBKDF2
+  cost so a big import fits in one request; Django re-hashes them at the full cost on first login.
+- The **Super Admin** (`is_superuser` + `is_staff`) is the only account that can open Django
+  Administration. The **Department Adviser** is portal-only (`is_staff=False`), and Super Admin
+  accounts are hidden from the adviser in the portal and the API, so they cannot be edited, deleted
+  or have their password reset by the adviser.
 - Email is not stored at all (not needed: sign-in is username + password), so there is no
   personal email data to leak.
 

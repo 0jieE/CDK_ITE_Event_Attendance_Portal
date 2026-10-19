@@ -14,7 +14,6 @@ class AuthProvider extends ChangeNotifier {
   AuthStatus _status = AuthStatus.unknown;
   User? _user;
   String? _error;
-  String? _errorCode;
   bool _busy = false;
 
   AuthProvider({ApiService? apiService}) : api = apiService ?? ApiService() {
@@ -24,10 +23,6 @@ class AuthProvider extends ChangeNotifier {
   AuthStatus get status => _status;
   User? get user => _user;
   String? get error => _error;
-
-  /// Backend machine code of the last login failure (e.g. PENDING_APPROVAL),
-  /// so the login screen can style the message. Null for plain errors.
-  String? get errorCode => _errorCode;
   bool get busy => _busy;
 
   /// On launch: if we have a token, validate it via /me/; else go to login.
@@ -46,7 +41,6 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> login(String username, String password) async {
-    _errorCode = null;
     _set(busy: true, error: null);
     try {
       await api.login(username.trim(), password);
@@ -54,9 +48,6 @@ class AuthProvider extends ChangeNotifier {
       _set(status: AuthStatus.authenticated, busy: false);
       return true;
     } on ApiException catch (e) {
-      // 403 PENDING_APPROVAL / REGISTRATION_REJECTED are login outcomes, not an
-      // expired session: nothing is cleared and no refresh is attempted.
-      _errorCode = e.code;
       _set(busy: false, error: e.message);
       return false;
     } catch (_) {
@@ -67,15 +58,13 @@ class AuthProvider extends ChangeNotifier {
 
   /// Hide the last login failure (e.g. when leaving the login screen).
   void clearError() {
-    if (_error == null && _errorCode == null) return;
-    _errorCode = null;
+    if (_error == null) return;
     _set(error: null);
   }
 
   Future<void> logout() async {
     await api.logout();
     _user = null;
-    _errorCode = null;
     _set(status: AuthStatus.unauthenticated, error: null);
   }
 

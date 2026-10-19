@@ -81,7 +81,8 @@ Configuration is read from `.env` via **django-environ**. Keys:
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` / `_FOLDER` | image storage (profile photos, QR PNGs, logo); blank = local disk |
 | `JWT_ACCESS_MINUTES` / `JWT_REFRESH_DAYS` | token lifetimes (30 min / 7 days) |
 | `NUM_PROXIES`, `THROTTLE_*` | reverse-proxy depth and API rate limits |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | first-run Department Adviser (containers) |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | first-run Department Adviser - portal only (containers) |
+| `SUPERADMIN_USERNAME` / `SUPERADMIN_PASSWORD` | first-run **Super Admin** - portal **and** Django Administration (created only when the password is set) |
 
 Every production variable, with comments, is in [`.env.prod.example`](.env.prod.example).
 
@@ -111,7 +112,8 @@ You can switch to SQLite for quick local work by setting
 
 ```bash
 python manage.py migrate
-python manage.py seed_admin          # creates the Department-Adviser superuser
+python manage.py seed_admin          # creates the Department Adviser (portal access only)
+python manage.py seed_superadmin --password CHANGE-ME   # the Super Admin (also opens /admin/)
 python manage.py runserver
 python manage.py test                # security/isolation/throttling/fines/UI tests
 ```
@@ -149,11 +151,10 @@ endpoints require the `IsAdmin` role.**
 |----------|---------|-------|
 | `users/` | CRUD | role flags; passwords hashed |
 | `instructors/` | CRUD | creates linked user (`is_instructor`) |
-| `students/` | CRUD | creates linked user (`is_student`); `?semester=&school_year=&approval_status=` |
-| `students/{id}/approve/`, `students/{id}/reject/` | POST | approve / reject a self-registered student (reject takes optional `{"reason"}`) |
+| `students/` | CRUD | creates linked user (`is_student`); `?semester=&school_year=&year_level=&section=` |
 | `school-years/` | CRUD | |
 | `semesters/` | CRUD | `?school_year=` |
-| `events/` | CRUD | `?semester=&school_year=&is_active=`; validates dates + required_types |
+| `events/` | CRUD | `?semester=&school_year=&is_active=`; validates dates + required_types; `day_fines` = `{"YYYY-MM-DD": "amount"}` per-day fine overrides |
 | `attendance-logs/` | **read-only** | `?event=&student=&date=&attendance_type=&status=&date_from=&date_to=` |
 | `fines/` | list/retrieve/update | `?event=&student=&status=&needs_review=` |
 | `fines/calculate/` | POST | body `{ "event_id": N }` → runs the fines calculator |
@@ -162,32 +163,39 @@ endpoints require the `IsAdmin` role.**
 | `reports/attendance/` | GET | `?semester=&event=&date_from=&date_to=`; `&format=csv` to download |
 | `reports/financial/` | GET | same filters; `&format=csv` to download |
 
-### Student sign-up & approval
+### Student accounts (no self sign-up)
 
-Students can register themselves in the mobile app (**Create account**). The account is
-created **inactive** with status `PENDING`, so it can't sign in or call any API until the
-Department Adviser approves it under **Portal -> Approvals** (a badge in the sidebar and an
-alert on the dashboard show how many are waiting).
+Students **cannot sign up** in the app. The Department Adviser creates every account and hands the
+student a username and password:
 
-* **Approve** activates the account. **Reject** keeps it inactive and stores an optional reason.
-* A correct login for a pending/rejected student returns `403` with `code` =
-  `PENDING_APPROVAL` / `REGISTRATION_REJECTED` (wrong credentials stay a generic `401`).
-* Pending and rejected students are **never fined**; a student approved part-way through an event
-  is accountable only from their approval day on (students added by the adviser: all days).
-* Sign-ups are rate-limited per IP (`THROTTLE_REGISTER`, default `5/hour`). Deleting a rejected
-  student (Portal -> Students) frees their username and student number for a new sign-up.
+* **Portal -> Students -> Import masterlist** takes a **CSV or Excel (.xlsx)** file
+  (`Student No., Last Name, First Name, Middle Name, Year Level, Section`; downloadable template in
+  both formats). You get a preview (new / already registered / errors) before anything is saved.
+* The **username is the student number**; a random 8-character password is generated for each
+  student. Students already registered are skipped, never changed.
+* The **printable credential slips** page (Print, or Download CSV) shows the passwords **once** -
+  they are stored hashed. **Reset & print** on the import page issues new passwords for a Year /
+  Section when slips must be reprinted.
+* Students can change their own password from the app's Profile page.
 * **No email field exists anywhere:** accounts are username + password only.
+
+### Roles
+
+| Role | Where | Notes |
+|------|-------|-------|
+| Super Admin (`is_superuser`) | portal **and** `/admin/` (Django Administration) | created by `seed_superadmin` / `SUPERADMIN_*`; invisible and untouchable to the adviser |
+| Department Adviser (`is_admin`) | **portal only** | `seed_admin`; never `is_staff`, so `/admin/` rejects them |
+| Instructor / Student | mobile app | an instructor created on the Users page automatically gets the Instructor profile |
 
 ### Mobile / system endpoints
 
 | Endpoint | Who | Notes |
 |----------|-----|-------|
 | `GET /healthz/` | anyone | liveness + database check (200 / 503) for proxies and uptime monitors |
-| `POST /api/auth/register/` | **anyone** | student self-sign-up (JSON or multipart with optional photo). Creates an **inactive, PENDING** account; rate-limited (5/hour/IP) |
 | `GET /api/me/` | any user | identity, role flags and `profile_image` (used to route the app) |
 | `POST/DELETE /api/me/photo/` | any user | set (multipart `image`) / remove **own** profile photo |
 | `GET /api/instructor/events/` | instructor | active events running today (`?all=true`: **every** event, newest first) |
-| `GET /api/instructor/events/{id}/attendance/` (`?date=`) | instructor | read-only class roster for one event-day: every approved student with PRESENT / ABSENT / PENDING per required slot, plus per-slot totals |
+| `GET /api/instructor/events/{id}/attendance/` (`?date=`) | instructor | read-only class roster for one event-day: every student with PRESENT / ABSENT / PENDING per required slot, plus per-slot totals |
 | `POST /api/instructor/scan/` | instructor | scan a QR token; result includes `student_photo`. Rate-limited |
 | `GET /api/instructor/scans/` | instructor | the instructor's own recent scans |
 | `GET /api/student/profile/` | student | own profile incl. name, username, year/section, photo |
@@ -246,13 +254,13 @@ auth** (separate from the mobile JWT layer).
 ### How it differs from Django `/admin/`
 | | `/portal/` | `/admin/` |
 |---|-----------|-----------|
-| Audience | Department Adviser (client) | superuser / developer |
-| Access rule | authenticated **`is_admin=True`** only | `is_staff`/superuser |
+| Audience | Department Adviser (client) and Super Admin | Super Admin / developer only |
+| Access rule | authenticated **`is_admin`** or superuser | `is_staff` (Super Admin only) |
 | Auth | Django sessions (portal login page) | Django admin login |
 | Purpose | day-to-day management UI | low-level data/debug tool |
 
-A bare superuser without `is_admin` is **not** allowed into the portal
-(enforced by `portal.mixins.admin_required` / `AdminRequiredMixin`).
+The adviser can use **only the portal**; Django Administration is for the Super Admin.
+(Enforced by `portal.mixins.admin_required` / `AdminRequiredMixin` and `is_staff`.)
 
 ### Logging in
 1. Seed/ensure an admin: `python manage.py seed_admin` → `admin` / `Admin@12345`
@@ -266,16 +274,23 @@ A bare superuser without `is_admin` is **not** allowed into the portal
 | Dashboard | `/portal/` | cards + per-event table + collected-vs-outstanding chart |
 | Users | `/portal/users/` | role flags, password set/reset |
 | Instructors | `/portal/instructors/` | creates + links the `User` in one form |
-| Students | `/portal/students/` | linked `User` + `student_number` + **year level & section** |
-| School Years | `/portal/school_years/` | |
-| Semesters | `/portal/semesters/` | select by School Year |
-| Events | `/portal/events/` | dates + `required_types` multi-select; validates `end ≥ start` |
-| Attendance Logs | `/portal/attendance_logs/` | **read-only**, filterable (event / student / **year** / **section** / date / type / status) |
-| **Reports** (sidebar group) | — | collapsible nav group containing the three below |
+| Students | `/portal/students/` | linked `User` + `student_number` + **year level & section**; **Import masterlist** (CSV/Excel) + printable credentials |
+| Events | `/portal/events/` | dates + `required_types` multi-select; validates `end ≥ start`; **fine per day** for multi-day events |
+| **Reports** (sidebar group) | — | Attendance Report, Attendance Logs, Financial Report, Fines |
+| ↳ Attendance Logs | `/portal/attendance_logs/` | **read-only**, filterable (event / student / **year** / **section** / date / type / status) + **Download CSV** + **Print** |
 | ↳ Attendance Report | `/portal/reports/attendance/` | filters + **Download CSV** + **Print** |
 | ↳ Financial Report | `/portal/reports/financial/` | filters + **Download CSV** + **Print** |
 | ↳ Fines | `/portal/fines/` | lives under Reports; see below |
-| Settings | `/portal/settings/` | UI theme, light/dark mode, branding & logo |
+| **Settings** (sidebar group) | — | Appearance, School Years, Semesters |
+| ↳ Appearance | `/portal/settings/` | UI theme, light/dark mode, branding & logo |
+| ↳ School Years | `/portal/school_years/` | |
+| ↳ Semesters | `/portal/semesters/` | select by School Year |
+
+#### Fine per day
+An event's **Fine per missed slot** is the default. When it spans several days the Add/Edit Event form lists
+one optional input per day: leave it empty to use the default, or enter a different amount for that day.
+A student's fine is the sum of each missed slot's day rate; changing a rate recomputes existing fines at once
+(paid fines are never overwritten - they are flagged for review).
 
 #### Fines page (`/portal/fines/`)
 Two toggle views plus the calculate/mark-paid workflow:
@@ -447,9 +462,9 @@ python manage.py seed_demo --clear    # remove exactly what it created
 Creates clearly tagged demo accounts (`stud01`-`stud24`, `inst01`/`inst02`, password
 `Demo-Pass-2026` unless `--password` is given), three events relative to *today* (finished /
 running / upcoming), attendance for every elapsed slot, fines from the normal calculator (about
-half of the finished event paid), plus pending and rejected sign-ups for the Approvals page.
+half of the finished event paid) and a per-day fine example on *ITE Tech Week*.
 It is repeatable (a re-run adds nothing) and never modifies existing users or events; existing
-approved students only get attendance in the *demo* events. In Docker:
+students only get attendance in the *demo* events. In Docker:
 `docker compose --env-file .env.prod exec web python manage.py seed_demo`.
 
 ---

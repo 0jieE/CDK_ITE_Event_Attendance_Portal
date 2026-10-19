@@ -40,7 +40,8 @@ Output: `build/app/outputs/flutter-apk/app-release.apk`. Details in the backend'
 flutter pub get
 flutter run            # device/emulator must reach the backend
 ```
-Sign in with an **instructor** or **student** account. Admins are sent to a
+Sign in with an **instructor** or **student** account. There is no self-registration: accounts
+are issued by the Department Adviser, who gives each student a username and password. Admins are sent to a
 "use the web portal" screen by design.
 
 ## Instructor features
@@ -52,8 +53,6 @@ Sign in with an **instructor** or **student** account. Admins are sent to a
 - **QR:** one QR per event-day. Only today's date is selectable (other days of a multi-day event are
   muted); once generated it is shown inline with a full-screen view instead of the Generate button.
 - **History:** filter by event (defaults to the event closest to today), grouped by date.
-- **Sign-up:** "New student? Create an account" on the login screen; the account stays pending until the
-  Department Adviser approves it (login then shows a waiting-for-approval or rejected notice).
 - **Profile:** change photo (camera/gallery), name, username and password.
 - **Theme:** Material 3 in the ITE brand green `#41B422` (light only).
 
@@ -71,7 +70,6 @@ lib/
   widgets/                  AsyncListView, AsyncView, StatusChip, LogoutAction
   screens/
     login_screen.dart
-    signup_screen.dart      student self-registration (pending adviser approval)
     instructor/             instructor_home (events) + scanner_screen
     student/                student_home (bottom nav) + dashboard / generate_qr /
                             qr_display / history / fines tabs

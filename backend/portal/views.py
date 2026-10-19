@@ -14,7 +14,6 @@ from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.views.decorators.http import require_POST
 
 from accounts.models import Instructor, Student
 from attendance import services
@@ -39,6 +38,7 @@ from .forms import (
     StudentForm,
     UserForm,
 )
+from . import masterlist
 from .mixins import (
     admin_required,
     htmx_action_response,
@@ -96,8 +96,6 @@ def dashboard_view(request):
     context = {
         "active": "dashboard",
         "data": data,
-        "pending_approvals": Student.objects.filter(
-            approval_status=Student.ApprovalStatus.PENDING).count(),
         "chart_labels": [e["event_name"] for e in data["events"]],
         "chart_collected": [float(e["collected"]) for e in data["events"]],
         "chart_outstanding": [float(e["outstanding"]) for e in data["events"]],
@@ -118,6 +116,9 @@ class EventsSection(CrudSection):
     select_related = ("semester__school_year",)
     order_by = ("-start_date", "name")
 
+    def get_queryset(self, request=None):
+        return super().get_queryset(request).prefetch_related("day_fines")
+
 
 class UsersSection(CrudSection):
     section = "users"
@@ -127,6 +128,14 @@ class UsersSection(CrudSection):
     form_class = UserForm
     table_template = "portal/users/partials/table.html"
     order_by = ("last_name", "first_name")
+
+    def get_queryset(self, request=None):
+        qs = super().get_queryset(request)
+        # Super Admin accounts are invisible (and so untouchable) to a Department Adviser:
+        # otherwise an adviser could reset the Super Admin's password from this page.
+        if request is None or not request.user.is_superuser:
+            qs = qs.filter(is_superuser=False)
+        return qs
 
 
 class _LinkedUserSection(CrudSection):
@@ -156,6 +165,7 @@ class StudentsSection(_LinkedUserSection):
     model = Student
     form_class = StudentForm
     table_template = "portal/students/partials/table.html"
+    actions_template = "portal/students/partials/actions.html"
     order_by = ("student_number",)
 
 
@@ -236,6 +246,27 @@ def attendance_logs_view(request):
     if f_section:
         qs = qs.filter(student__section=f_section)
 
+    if request.GET.get("format") == "csv":
+        rows = [
+            {
+                "Student No.": log.student.student_number,
+                "Student": log.student.user.get_full_name() or log.student.user.username,
+                "Year": log.student.get_year_level_display(),
+                "Section": log.student.section,
+                "Event": log.event.name,
+                "Date": log.date.isoformat(),
+                "Type": log.get_attendance_type_display(),
+                "Status": log.get_status_display(),
+                "Scanned At": timezone.localtime(log.scanned_at).strftime("%Y-%m-%d %H:%M") if log.scanned_at else "",
+                "Scanned By": log.scanned_by.user.get_full_name() if log.scanned_by else "",
+            }
+            for log in qs.order_by("-date", "event__name", "student__user__last_name")
+        ]
+        if not rows:
+            rows = [{"Student No.": "", "Student": "", "Year": "", "Section": "", "Event": "", "Date": "",
+                     "Type": "", "Status": "", "Scanned At": "", "Scanned By": ""}]
+        return _csv_response(rows, "attendance_logs.csv")
+
     context = {
         "active": "attendance_logs",
         "objects": qs,
@@ -254,59 +285,6 @@ def attendance_logs_view(request):
     if is_htmx(request) and request.GET.get("partial") == "table":
         return render(request, "portal/attendance_logs/partials/table.html", context)
     return render(request, "portal/attendance_logs/list.html", context)
-
-
-# ---------------------------------------------------------------------------
-# Student sign-up approvals
-# ---------------------------------------------------------------------------
-_APPROVAL_TABS = (Student.ApprovalStatus.PENDING, Student.ApprovalStatus.REJECTED)
-
-
-def _approval_counts():
-    return {s.value: Student.objects.filter(approval_status=s).count() for s in _APPROVAL_TABS}
-
-
-@admin_required
-def approvals_view(request):
-    """Students who registered in the mobile app, waiting for (or denied) approval."""
-    status = request.GET.get("status")
-    if status not in {s.value for s in _APPROVAL_TABS}:
-        status = Student.ApprovalStatus.PENDING.value
-    partial = is_htmx(request) and request.GET.get("partial") == "table"
-    ctx = {
-        "active": "approvals",
-        "status": status,
-        "counts": _approval_counts(),
-        "objects": Student.objects.select_related("user")
-        .filter(approval_status=status).order_by("user__date_joined"),
-        "oob": partial,        # only HTMX fragments carry the out-of-band badge update
-    }
-    template = "portal/approvals/partials/table.html" if partial else "portal/approvals/list.html"
-    return render(request, template, ctx)
-
-
-@admin_required
-@require_POST
-def approval_approve_view(request, pk):
-    student = get_object_or_404(Student.objects.select_related("user"), pk=pk)
-    student.approve(by=request.user)
-    return htmx_action_response(
-        toast=f"{student.user.get_full_name() or student.user.username} approved - they can sign in now.",
-        refresh_event="refresh-approvals", close_modal=False,
-    )
-
-
-@admin_required
-def approval_reject_view(request, pk):
-    """Modal asking for an optional reason, then rejects the sign-up."""
-    student = get_object_or_404(Student.objects.select_related("user"), pk=pk)
-    if request.method == "POST":
-        student.reject(by=request.user, reason=request.POST.get("reason", ""))
-        return htmx_action_response(
-            toast=f"{student.user.get_full_name() or student.user.username} rejected.",
-            level="warning", refresh_event="refresh-approvals",
-        )
-    return render(request, "portal/approvals/partials/reject_form.html", {"student": student})
 
 
 # ---------------------------------------------------------------------------
@@ -330,6 +308,7 @@ def _build_attendance_grid(student, event):
     hasn't closed yet, ``Absent`` when it closed with no scan, else Present.
     """
     required = set(event.required_types or [])
+    rates = event.rate_map()
     now = timezone.localtime()
     logs = {
         (log.date, log.attendance_type): log.status
@@ -352,8 +331,8 @@ def _build_attendance_grid(student, event):
                 else:
                     cells.append({"value": _STATUS_LABELS.get(status, status),
                                   "kind": status.lower()})
-        rows.append({"date": day, "cells": cells})
-    return {"slot_headers": [slot_labels[s] for s in _SLOT_ORDER], "rows": rows}
+        rows.append({"date": day, "cells": cells, "rate": rates.get(day, event.fine_rate)})
+    return {"has_day_fines": bool(rates), "slot_headers": [slot_labels[s] for s in _SLOT_ORDER], "rows": rows}
 
 
 @admin_required
@@ -556,3 +535,123 @@ def settings_view(request):
         "settings_obj": settings_obj,
         "palettes": PALETTES,
     })
+
+
+# ---------------------------------------------------------------------------
+# Student masterlist import + printable credentials
+# ---------------------------------------------------------------------------
+_PENDING_KEY = "masterlist_pending"
+_CREDS_KEY = "student_credentials"
+
+
+def _import_context(request, **extra):
+    ctx = {
+        "active": "students",
+        "columns": masterlist.COLUMNS,
+        "year_levels": Student.YearLevel.choices,
+        "sections": _distinct_sections(),
+    }
+    ctx.update(extra)
+    return ctx
+
+
+@admin_required
+def students_import_view(request):
+    """Upload a masterlist (preview -> confirm); the adviser then prints the credentials."""
+    if request.method != "POST":
+        return render(request, "portal/students/import.html", _import_context(request))
+
+    action = request.POST.get("action", "preview")
+
+    if action == "confirm":
+        rows = request.session.get(_PENDING_KEY)
+        if not rows:
+            messages.error(request, "Nothing to import - upload the file again.")
+            return redirect("portal:students-import")
+        # Re-validate: another import may have happened between preview and confirm.
+        rows = masterlist.validate_rows(rows)
+        credentials = masterlist.import_rows(rows)
+        request.session.pop(_PENDING_KEY, None)
+        request.session[_CREDS_KEY] = credentials
+        counts = masterlist.summarize(rows)
+        messages.success(
+            request,
+            f"Imported {len(credentials)} student(s); {counts['exists']} already existed and "
+            f"{counts['error']} row(s) had errors and were skipped.",
+        )
+        return redirect("portal:students-credentials")
+
+    upload = request.FILES.get("file")
+    if not upload:
+        messages.error(request, "Choose a .csv or .xlsx file first.")
+        return redirect("portal:students-import")
+    try:
+        rows = masterlist.validate_rows(masterlist.parse_upload(upload))
+    except masterlist.MasterlistError as exc:
+        messages.error(request, str(exc))
+        return redirect("portal:students-import")
+    request.session[_PENDING_KEY] = rows
+    return render(request, "portal/students/import_preview.html", _import_context(
+        request, rows=rows, counts=masterlist.summarize(rows), filename=upload.name,
+    ))
+
+
+@admin_required
+def students_import_template_view(request, fmt):
+    if fmt == "xlsx":
+        response = HttpResponse(
+            masterlist.template_xlsx_bytes(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = 'attachment; filename="student_masterlist_template.xlsx"'
+        return response
+    if fmt == "csv":
+        response = HttpResponse(masterlist.template_csv_bytes(), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="student_masterlist_template.csv"'
+        return response
+    from django.http import Http404
+
+    raise Http404
+
+
+@admin_required
+def students_credentials_view(request):
+    """Printable username/password slips for the last import or bulk reset."""
+    credentials = request.session.get(_CREDS_KEY) or []
+    if request.GET.get("format") == "csv":
+        rows = [
+            {"Student No.": c["student_number"], "Name": c["name"], "Year & Section": c["year_section"],
+             "Username": c["username"], "Password": c["password"]}
+            for c in credentials
+        ] or [{"Student No.": "", "Name": "", "Year & Section": "", "Username": "", "Password": ""}]
+        return _csv_response(rows, "student_credentials.csv")
+    if request.GET.get("clear") == "1" and request.method == "POST":
+        request.session.pop(_CREDS_KEY, None)
+        return redirect("portal:students-list")
+    return render(request, "portal/students/slips.html", {
+        "active": "students", "credentials": credentials,
+    })
+
+
+@admin_required
+def students_credentials_reset_view(request):
+    """Bulk reset: new random passwords for a Year / Section, then print them."""
+    if request.method != "POST":
+        return redirect("portal:students-import")
+    qs = Student.objects.all()
+    year = request.POST.get("year_level") or ""
+    section = request.POST.get("section") or ""
+    if year:
+        qs = qs.filter(year_level=year)
+    if section:
+        qs = qs.filter(section=section)
+    if request.POST.get("confirm") != "yes":
+        messages.error(request, "Tick the confirmation box to reset passwords.")
+        return redirect("portal:students-import")
+    credentials = masterlist.reset_passwords(qs.order_by("year_level", "section", "user__last_name"))
+    if not credentials:
+        messages.warning(request, "No students match that Year / Section.")
+        return redirect("portal:students-import")
+    request.session[_CREDS_KEY] = credentials
+    messages.success(request, f"Reset the password of {len(credentials)} student(s). Print the slips now - they are shown once.")
+    return redirect("portal:students-credentials")

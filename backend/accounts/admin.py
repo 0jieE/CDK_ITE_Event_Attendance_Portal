@@ -43,6 +43,6 @@ class InstructorAdmin(admin.ModelAdmin):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ("student_number", "user", "year_level", "section", "approval_status")
-    list_filter = ("approval_status", "year_level", "section")
+    list_display = ("student_number", "user", "year_level", "section")
+    list_filter = ("year_level", "section")
     search_fields = ("student_number", "user__username", "user__last_name")

@@ -1,0 +1,68 @@
+{% extends "portal/base.html" %}
+{% block title %}Student Credentials{% endblock %}
+{% block page_title %}Student Credentials{% endblock %}
+
+{% block content %}
+<style>
+  .slip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: .9rem; }
+  .slip { border: 1.5px dashed #9aa79a; border-radius: .6rem; padding: .85rem 1rem; background: #fff; color: #111; break-inside: avoid; page-break-inside: avoid; }
+  .slip .slip-school { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: #41b422; font-weight: 700; }
+  .slip .slip-name { font-weight: 700; font-size: 1.02rem; line-height: 1.25; }
+  .slip .slip-meta { font-size: .8rem; color: #555; margin-bottom: .5rem; }
+  .slip dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: .15rem .6rem; font-size: .92rem; }
+  .slip dt { color: #555; font-weight: 500; }
+  .slip dd { margin: 0; font-family: ui-monospace, Consolas, monospace; font-weight: 700; font-size: 1rem; word-break: break-all; }
+  .slip .slip-note { font-size: .7rem; color: #666; margin-top: .55rem; }
+  @media print {
+    .slip-grid { grid-template-columns: repeat(2, 1fr); gap: .6rem; }
+    .slip { border-color: #666; }
+    .card { border: 0 !important; box-shadow: none !important; }
+    .card-body { padding: 0 !important; }
+  }
+</style>
+
+<div class="page-head">
+  <div>
+    <h2 class="page-title">Student Credentials</h2>
+    <div class="page-sub no-print"><i class="bi bi-shield-exclamation"></i> Passwords are shown only here and cannot be recovered later &mdash; print or download them now.</div>
+  </div>
+  <div class="page-actions no-print">
+    <a class="btn btn-outline-secondary" href="{% url 'portal:students-list' %}"><i class="bi bi-arrow-left"></i> Students</a>
+    {% if credentials %}
+      <a class="btn btn-outline-secondary" href="?format=csv"><i class="bi bi-filetype-csv"></i> Download CSV</a>
+      <button type="button" class="btn btn-primary" onclick="window.print()"><i class="bi bi-printer"></i> Print slips</button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    {% if not credentials %}
+      <div class="text-center text-muted py-5">
+        <i class="bi bi-person-lock fs-1 d-block mb-2"></i>
+        No credentials to show. Import a masterlist or reset a class&rsquo;s passwords first.
+        <div class="mt-3"><a class="btn btn-primary" href="{% url 'portal:students-import' %}">Import students</a></div>
+      </div>
+    {% else %}
+      <div class="slip-grid">
+        {% for c in credentials %}
+          <div class="slip">
+            <div class="slip-school">{{ ui.brand_title|default:"ITE Attendance" }}</div>
+            <div class="slip-name">{{ c.name }}</div>
+            <div class="slip-meta">{{ c.student_number }}{% if c.year_section %} &middot; {{ c.year_section }}{% endif %}</div>
+            <dl>
+              <dt>Username</dt><dd>{{ c.username }}</dd>
+              <dt>Password</dt><dd>{{ c.password }}</dd>
+            </dl>
+            <div class="slip-note">Sign in on the ITE Attendance app. You can change your password under Profile.</div>
+          </div>
+        {% endfor %}
+      </div>
+      <form method="post" action="?clear=1" class="mt-4 no-print">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-eraser"></i> Done &mdash; clear these from the server</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

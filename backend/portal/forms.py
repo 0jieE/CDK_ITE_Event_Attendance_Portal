@@ -4,13 +4,18 @@ A :class:`BootstrapModelForm` base auto-applies Bootstrap 5 classes so the
 field-rendering template can stay generic across every section.
 """
 
+import datetime
+import json
+from decimal import Decimal, InvalidOperation
+
 from django import forms
+from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 
 from accounts.images import validate_image_file
 from accounts.models import Instructor, Student
-from attendance.models import AttendanceType, Event, SchoolYear, Semester
+from attendance.models import AttendanceType, Event, EventDayFine, SchoolYear, Semester
 
 from .models import PortalSettings
 
@@ -98,17 +103,61 @@ class EventForm(BootstrapModelForm):
             self.fields[name].input_formats = ["%Y-%m-%d"]
         for name in self.TIME_FIELDS:
             self.fields[name].input_formats = ["%H:%M", "%H:%M:%S"]
-        self.fields["fine_rate"].help_text = "Amount charged per missed slot."
+        self.fields["fine_rate"].label = "Fine per missed slot"
+        self.fields["fine_rate"].help_text = (
+            "Default amount charged per missed slot. For a multi-day event you can set a "
+            "different amount for each day below."
+        )
         self.fields["am_in_start"].help_text = (
             "Set the scan window for each required slot. Scanning is only allowed "
             "inside these times; outside them the slot is marked absent."
         )
+
+    # -- per-day fines (inputs named ``day_fine__YYYY-MM-DD``, built by JS) -------
+    DAY_FINE_PREFIX = "day_fine__"
+    supports_day_fines = True
+
+    def _posted_day_fines(self):
+        """``{date: raw string}`` from the submitted ``day_fine__*`` inputs."""
+        out = {}
+        for key, value in self.data.items():
+            if key.startswith(self.DAY_FINE_PREFIX):
+                out[key[len(self.DAY_FINE_PREFIX):]] = (value or "").strip()
+        return out
+
+    @property
+    def day_fines_json(self):
+        """Existing/typed per-day rates for the JS that renders the inputs."""
+        if self.is_bound:
+            return json.dumps({k: v for k, v in self._posted_day_fines().items() if v})
+        if self.instance and self.instance.pk:
+            return json.dumps({k: str(v) for k, v in self.instance.day_rates.items()})
+        return "{}"
+
+    def _clean_day_fines(self, start, end):
+        rates = {}
+        for raw_day, raw in self._posted_day_fines().items():
+            if not raw:
+                continue                                   # blank = use the default rate
+            try:
+                day = datetime.date.fromisoformat(raw_day)
+                value = Decimal(raw)
+            except (ValueError, InvalidOperation):
+                self.add_error(None, f"Fine for {raw_day} must be a number.")
+                continue
+            if value < 0 or value.as_tuple().exponent < -2 or value >= Decimal("100000000"):
+                self.add_error(None, f"Fine for {raw_day} must be zero or more, with at most 2 decimals.")
+                continue
+            if start and end and start <= day <= end:
+                rates[day] = value
+        return rates
 
     def clean(self):
         cleaned = super().clean()
         start, end = cleaned.get("start_date"), cleaned.get("end_date")
         if start and end and end < start:
             self.add_error("end_date", "End date must be on or after the start date.")
+        self._day_rates = self._clean_day_fines(start, end)
         # A slot that isn't required has no scan window: drop any stale times so they
         # can't be saved (or trip validation) invisibly.
         required = set(cleaned.get("required_types") or [])
@@ -117,6 +166,27 @@ class EventForm(BootstrapModelForm):
                 cleaned[start_field] = None
                 cleaned[end_field] = None
         return cleaned
+
+    def save(self, commit=True):
+        before = None
+        if self.instance.pk:
+            before = (self.instance.fine_rate, self.instance.day_rates)
+        with transaction.atomic():
+            event = super().save(commit=commit)
+            if commit:
+                EventDayFine.objects.filter(event=event).delete()
+                EventDayFine.objects.bulk_create(
+                    EventDayFine(event=event, date=day, fine_rate=rate)
+                    for day, rate in self._day_rates.items() if rate != event.fine_rate
+                )
+        if commit and before is not None:
+            event.refresh_from_db()
+            if before != (event.fine_rate, event.day_rates):
+                # Rates changed: bring the existing fines in line right away.
+                from attendance.services import compute_fines_for_event
+
+                compute_fines_for_event(event)
+        return event
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +238,16 @@ class UserForm(BootstrapModelForm):
         elif self.instance.pk is None:
             raise forms.ValidationError("Password is required when creating a user.")
         return pwd
+
+    def clean_is_student(self):
+        wanted = self.cleaned_data.get("is_student")
+        has_profile = bool(self.instance.pk) and Student.objects.filter(user=self.instance).exists()
+        if wanted and not has_profile:
+            raise forms.ValidationError(
+                "A student account needs a student number - add students on the Students page "
+                "(or import a masterlist) instead."
+            )
+        return wanted
 
     def save(self, commit=True):
         user = super().save(commit=False)
@@ -246,10 +326,6 @@ class LinkedUserForm(BootstrapModelForm):
             raise forms.ValidationError("Password is required when creating.")
         return pwd
 
-    def _resolve_active(self, wanted):
-        """Hook: subclasses may veto activating the account (default: as requested)."""
-        return wanted
-
     def _save_user(self):
         """Create or update the linked user, enforcing the role flag."""
         creating = self.instance.pk is None
@@ -258,7 +334,7 @@ class LinkedUserForm(BootstrapModelForm):
         user.first_name = self.cleaned_data.get("first_name", "")
         user.middle_name = self.cleaned_data.get("middle_name", "")
         user.last_name = self.cleaned_data.get("last_name", "")
-        user.is_active = self._resolve_active(self.cleaned_data.get("is_active", True))
+        user.is_active = self.cleaned_data.get("is_active", True)
         image = self.cleaned_data.get("profile_image")
         if image is False:                 # "Remove photo" ticked
             user.profile_image = None
@@ -272,11 +348,19 @@ class LinkedUserForm(BootstrapModelForm):
         return user
 
     def save(self, commit=True):
-        user = self._save_user()
-        profile = super().save(commit=False)
-        profile.user = user
-        if commit:
-            profile.save()
+        # All-or-nothing: a failure while saving the profile must not leave a user behind.
+        with transaction.atomic():
+            user = self._save_user()
+            profile = super().save(commit=False)
+            profile.user = user
+            if commit:
+                # Saving a user flagged is_instructor already created its Instructor row
+                # (see accounts.models); reuse it instead of inserting a duplicate.
+                existing = type(profile)._default_manager.filter(user=user).first()
+                if existing is not None and profile.pk is None:
+                    profile.pk = existing.pk
+                    profile._state.adding = False
+                profile.save()
         return profile
 
 
@@ -292,16 +376,6 @@ class InstructorForm(LinkedUserForm):
 
 class StudentForm(LinkedUserForm):
     role_flag = "is_student"
-
-    def _resolve_active(self, wanted):
-        # A pending/rejected sign-up can only be activated from the Approvals page.
-        if self.instance.pk and not self.instance.is_approved:
-            return False
-        return wanted
-
-    field_order = [
-        "student_number", "year_level", "section",
-    ] + LinkedUserForm.user_field_order
 
     class Meta:
         model = Student

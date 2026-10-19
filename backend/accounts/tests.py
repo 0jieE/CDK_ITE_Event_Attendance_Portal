@@ -172,7 +172,7 @@ class PhotoApiTests(TestCase):
             required_types=["AM_IN"], am_in_start=datetime.time(0, 0), am_in_end=datetime.time(23, 59, 59))
         qr = QRCode.objects.create(student=self.student, event=ev, date=today)
         ins = User.objects.create_user("ins", password="x", is_instructor=True)
-        Instructor.objects.create(user=ins)
+        Instructor.objects.get_or_create(user=ins)
         c = APIClient()
         c.force_authenticate(ins)
         res = c.post(reverse("instructor-scan"), {"token": qr.token})

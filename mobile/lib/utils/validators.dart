@@ -19,47 +19,6 @@ String? validateConfirm(String? confirm, String newPassword) {
   return null;
 }
 
-// --- Self-registration ------------------------------------------------------
-
-/// Year levels offered at sign-up: API value -> label.
-const yearLevels = {
-  '1': '1st Year',
-  '2': '2nd Year',
-  '3': '3rd Year',
-  '4': '4th Year',
-};
-
-String? validateStudentNumber(String? v) {
-  final t = v?.trim() ?? '';
-  if (t.isEmpty) return 'Enter your student number';
-  if (t.length < 3) return 'That student number looks too short';
-  return null;
-}
-
-/// Username: required, no spaces, at least 3 characters. Uniqueness and any
-/// other character rules are the server's call.
-String? validateUsername(String? v) {
-  final t = v?.trim() ?? '';
-  if (t.isEmpty) return 'Choose a username';
-  if (RegExp(r'\s').hasMatch(t)) return 'No spaces in a username';
-  if (t.length < 3) return 'Use at least 3 characters';
-  return null;
-}
-
-String? validateYearLevel(String? v) =>
-    (v == null || !yearLevels.containsKey(v)) ? 'Choose your year level' : null;
-
-/// Password for a new account: the quick checks only (the server's Django
-/// validators have the final say, and their messages are shown on rejection).
-String? validateRegistrationPassword(String? v) {
-  if (v == null || v.isEmpty) return 'Choose a password';
-  if (v.length < 8) return 'Use at least 8 characters';
-  if (RegExp(r'^\d+$').hasMatch(v)) {
-    return 'Add some letters; numbers alone are too easy to guess';
-  }
-  return null;
-}
-
 /// The PATCH body: only the editable fields whose trimmed value differs from
 /// [current]. Empty map when nothing changed.
 Map<String, String> changedProfileFields(

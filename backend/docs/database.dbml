@@ -17,18 +17,14 @@ Project qr_attendance {
     * Sign-in is username + password only (there is NO email column).
     * One QR code per student per event-day; the slot (AM_IN / AM_OUT / PM_IN / PM_OUT)
       is decided by the server at scan time from the event's time windows.
-    * Fines are a ledger: missed required slots x event.fine_rate, one row per student+event.
+    * Fines are a ledger: each missed required slot costs that day's rate (event.fine_rate, or an
+      attendance_eventdayfine override), one row per student+event.
+    * Students cannot sign up: the adviser imports the masterlist (CSV/Excel) and prints the credentials.
     * Images (profile photos, QR PNGs, portal logo) live on Cloudinary; the DB stores the path.
   '''
 }
 
 // ----------------------------------------------------------------- enums ---
-Enum approval_status {
-  PENDING  [note: 'Self-registered, waiting for the Department Adviser']
-  APPROVED [note: 'Can sign in (also the default for adviser-created students)']
-  REJECTED [note: 'Denied; account stays inactive (reason is stored)']
-}
-
 Enum year_level {
   "1" [note: '1st Year']
   "2" [note: '2nd Year']
@@ -83,12 +79,12 @@ Table accounts_user [headercolor: #41b422] {
   middle_name   varchar(150)  [null]
   last_name     varchar(150)  [not null, default: '']
   profile_image varchar(100)  [null, note: 'Cloudinary path, e.g. profiles/<random>.jpg']
-  is_admin      boolean       [not null, default: false, note: 'Department Adviser - full control']
+  is_admin      boolean       [not null, default: false, note: 'Department Adviser - portal access only']
   is_instructor boolean       [not null, default: false, note: 'Scans attendance in the mobile app']
   is_student    boolean       [not null, default: false, note: 'Views own data in the mobile app']
-  is_active     boolean       [not null, default: true, note: 'False = cannot sign in (e.g. pending sign-up)']
-  is_staff      boolean       [not null, default: false, note: 'May open Django Administration']
-  is_superuser  boolean       [not null, default: false]
+  is_active     boolean       [not null, default: true, note: 'False = cannot sign in']
+  is_staff      boolean       [not null, default: false, note: 'Super Admin only - may open Django Administration']
+  is_superuser  boolean       [not null, default: false, note: 'Super Admin - portal + Django Administration']
   last_login    timestamptz   [null]
   date_joined   timestamptz   [not null]
 
@@ -103,21 +99,13 @@ Table accounts_instructor [headercolor: #41b422] {
 }
 
 Table accounts_student [headercolor: #41b422] {
-  id               bigint          [pk, increment]
-  user_id          bigint          [not null, unique, note: '1:1 with accounts_user']
-  student_number   varchar(50)     [not null, unique]
-  year_level       year_level      [not null, default: '', note: 'Blank until set']
-  section          varchar(20)     [not null, default: '']
-  approval_status  approval_status [not null, default: 'APPROVED']
-  reviewed_at      timestamptz     [null, note: 'When the adviser approved/rejected; also the day fines start counting for late joiners']
-  reviewed_by_id   bigint          [null, note: 'Adviser who decided']
-  rejection_reason varchar(255)    [not null, default: '']
+  id             bigint      [pk, increment]
+  user_id        bigint      [not null, unique, note: '1:1 with accounts_user']
+  student_number varchar(50) [not null, unique, note: 'Also the username']
+  year_level     year_level  [not null, default: '', note: 'Blank until set']
+  section        varchar(20) [not null, default: '']
 
-  indexes {
-    approval_status
-  }
-
-  Note: 'Student profile. Self-registered students start PENDING with an inactive user.'
+  Note: 'Student profile. Created by the adviser (one by one or masterlist import).'
 }
 
 // ------------------------------------------------- school year & events ---
@@ -142,7 +130,7 @@ Table attendance_event [headercolor: #2b8416] {
   semester_id    bigint        [not null]
   start_date     date          [not null]
   end_date       date          [not null, note: 'Multi-day events: start_date..end_date']
-  fine_rate      decimal(10,2) [not null, default: 0, note: 'Charged per missed required slot']
+  fine_rate      decimal(10,2) [not null, default: 0, note: 'Default charge per missed required slot']
   required_types jsonb         [not null, default: '["AM_IN","AM_OUT","PM_IN","PM_OUT"]', note: 'List of attendance_type values that are mandatory']
   is_active      boolean       [not null, default: true]
   am_in_start    time          [null, note: 'Scan windows - the same times apply to every day of the event']
@@ -155,6 +143,19 @@ Table attendance_event [headercolor: #2b8416] {
   pm_out_end     time          [null]
 
   Note: 'A (possibly multi-day) event. Every required slot must have a start/end window.'
+}
+
+Table attendance_eventdayfine [headercolor: #2b8416] {
+  id        bigint        [pk, increment]
+  event_id  bigint        [not null]
+  date      date          [not null, note: 'A day within the event dates']
+  fine_rate decimal(10,2) [not null, note: 'Charge per missed required slot on this day']
+
+  indexes {
+    (event_id, date) [unique]
+  }
+
+  Note: 'Optional per-day fine override for multi-day events; days without a row use attendance_event.fine_rate.'
 }
 
 // ---------------------------------------------------- QR & attendance ---
@@ -192,7 +193,7 @@ Table attendance_fine [headercolor: #f5b301] {
   id             bigint        [pk, increment]
   student_id     bigint        [not null]
   event_id       bigint        [not null]
-  amount         decimal(10,2) [not null, default: 0, note: 'missed_slots x event.fine_rate']
+  amount         decimal(10,2) [not null, default: 0, note: 'sum of the day rate of every missed slot']
   missed_slots   int           [not null, default: 0]
   status         fine_status   [not null, default: 'UNPAID']
   paid_at        timestamptz   [null]
@@ -246,10 +247,9 @@ Ref: accounts_instructor.user_id - accounts_user.id [delete: cascade]
 Ref: accounts_student.user_id    - accounts_user.id [delete: cascade]
 
 // (many-to-one)  >
-Ref: accounts_student.reviewed_by_id > accounts_user.id [delete: set null]
-
 Ref: attendance_semester.school_year_id > attendance_schoolyear.id [delete: cascade]
 Ref: attendance_event.semester_id       > attendance_semester.id   [delete: cascade]
+Ref: attendance_eventdayfine.event_id   > attendance_event.id      [delete: cascade]
 
 Ref: attendance_qrcode.student_id > accounts_student.id [delete: cascade]
 Ref: attendance_qrcode.event_id   > attendance_event.id [delete: cascade]

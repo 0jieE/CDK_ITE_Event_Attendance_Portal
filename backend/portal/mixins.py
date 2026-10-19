@@ -16,12 +16,15 @@ from django.http import HttpResponse
 
 
 def is_portal_admin(user):
-    """True only for an authenticated Department Adviser (``is_admin``).
+    """True for an authenticated Department Adviser (``is_admin``) or Super Admin.
 
-    Note: a bare Django superuser is **not** granted portal access here unless
-    they also carry the ``is_admin`` flag — the portal is a client-role tool.
+    The adviser can use ONLY the portal. The Super Admin (``is_superuser``) can use the
+    portal too and is the only role that can open Django Administration (``is_staff``).
     """
-    return bool(user and user.is_authenticated and getattr(user, "is_admin", False))
+    return bool(
+        user and user.is_authenticated
+        and (getattr(user, "is_admin", False) or getattr(user, "is_superuser", False))
+    )
 
 
 def admin_required(view_func):

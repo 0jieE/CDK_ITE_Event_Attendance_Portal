@@ -54,8 +54,9 @@ def compute_fines_for_event(event, as_of=None, now=None):
     date within ``[start_date, end_date]``.  A slot is **missed** when it has
     *elapsed* (see :func:`slot_has_elapsed`) and there is no
     :class:`AttendanceLog` with status ``PRESENT`` for that
-    student / event / date / type.  So the fine is ``missed slots x fine_rate``:
-    per required attendance, never per day.
+    student / event / date / type.  So the fine is the sum, over the missed slots, of
+    that day's rate (``Event.fine_rate`` unless the day has an ``EventDayFine``
+    override): per required attendance, with a customisable rate per day.
 
     **Only slots that are over are counted.** Past days count every required
     slot; today counts a slot only after its scan window has closed; future days
@@ -77,6 +78,7 @@ def compute_fines_for_event(event, as_of=None, now=None):
     required_types = event.required_types or []
     # Coerce the rate to Decimal (it may arrive as a str on an unsaved instance).
     fine_rate = event.fine_rate if isinstance(event.fine_rate, Decimal) else Decimal(str(event.fine_rate))
+    day_rates = event.rate_map() if event.pk else {}
 
     dates = [d for d in event.iter_dates() if d <= as_of]
     # The slots that are already over - identical for every student.
@@ -94,19 +96,13 @@ def compute_fines_for_event(event, as_of=None, now=None):
     # One query for every existing fine (avoids a query per student).
     existing = {f.student_id: f for f in Fine.objects.filter(event=event)}
 
-    # Only approved students are enrolled: a pending/rejected sign-up is never fined.
-    students = list(Student.objects.filter(approval_status=Student.ApprovalStatus.APPROVED))
+    students = list(Student.objects.all())
     results = {"created": 0, "updated": 0, "flagged_for_review": 0, "fines": []}
 
     for student in students:
-        # A student who signed up and was approved part-way through an event is only
-        # accountable from their approval day on (admin-created students: all days).
-        joined = timezone.localtime(student.reviewed_at).date() if student.reviewed_at else None
-        missed = sum(
-            1 for (d, t) in elapsed_slots
-            if (joined is None or d >= joined) and (student.id, d, t) not in credited_keys
-        )
-        amount = (Decimal(missed) * fine_rate).quantize(Decimal("0.01"))
+        missed_on = [d for (d, t) in elapsed_slots if (student.id, d, t) not in credited_keys]
+        missed = len(missed_on)
+        amount = sum((day_rates.get(d, fine_rate) for d in missed_on), Decimal("0")).quantize(Decimal("0.01"))
 
         fine = existing.get(student.id)
 

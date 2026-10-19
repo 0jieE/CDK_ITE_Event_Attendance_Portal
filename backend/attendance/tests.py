@@ -130,7 +130,7 @@ class ScanTokenTests(TestCase):
             student=self.student, event=self.event, date=timezone.localdate())
         ins_user = User.objects.create_user(
             username="ins", password=PASSWORD, is_instructor=True)
-        Instructor.objects.create(user=ins_user)
+        Instructor.objects.get_or_create(user=ins_user)
         self.client = APIClient()
         self.client.force_authenticate(ins_user)
 

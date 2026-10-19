@@ -101,6 +101,14 @@ and text areas) always span the full row.
       </div>
       {% endwith %}
     {% endif %}
+    {% if field.name == 'fine_rate' and form.supports_day_fines %}
+      {# Multi-day events: one optional rate per day (inputs built by syncDayFines in base.html). #}
+      <div class="col-12 day-fines" data-existing="{{ form.day_fines_json }}" hidden>
+        <div class="form-section"><i class="bi bi-calendar-week"></i> Fine per day</div>
+        <div class="form-text mt-1 mb-2">This event runs several days. Leave a day empty to use the default above, or set a different fine per missed slot for that day.</div>
+        <div class="row g-2 day-fines-list"></div>
+      </div>
+    {% endif %}
   {% endif %}
 {% endfor %}
 </div>

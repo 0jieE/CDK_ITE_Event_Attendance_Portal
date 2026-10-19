@@ -51,7 +51,7 @@ Cell shows '–' when the slot isn't required, 'Pending' while open, 'Absent' wh
       <tbody>
         {% for row in grid.rows %}
           <tr>
-            <td class="text-start">{{ row.date|date:"D, M d, Y" }}</td>
+            <td class="text-start">{{ row.date|date:"D, M d, Y" }}{% if grid.has_day_fines %}<div class="small text-muted">₱{{ row.rate }} / missed slot</div>{% endif %}</td>
             {% for cell in row.cells %}
               <td>
                 {% if cell.kind == 'na' %}<span class="text-muted">{{ cell.value }}</span>

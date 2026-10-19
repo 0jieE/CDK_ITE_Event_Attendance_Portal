@@ -43,6 +43,12 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
 
+      # ---- First-run Super Admin: portal + Django Administration (/admin/) ----
+      - key: SUPERADMIN_USERNAME
+        value: superadmin
+      - key: SUPERADMIN_PASSWORD
+        sync: false
+
       # ---- Images: profile photos, QR PNGs, portal logo ----
       - key: CLOUDINARY_CLOUD_NAME
         sync: false

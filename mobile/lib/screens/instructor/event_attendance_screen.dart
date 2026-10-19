@@ -237,7 +237,7 @@ class _EventAttendanceScreenState extends State<EventAttendanceScreen> {
         ? const StateMessage(
             icon: Icons.groups_outlined,
             title: 'No students to show',
-            subtitle: 'No approved students are on this class list yet.',
+            subtitle: 'No students are on this class list yet.',
           )
         : const StateMessage(
             icon: Icons.search_off,

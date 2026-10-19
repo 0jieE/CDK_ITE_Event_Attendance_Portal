@@ -1,4 +1,4 @@
-"""Seed (or update) a single Department-Adviser admin superuser.
+"""Seed (or update) the Department-Adviser account (portal access only).
 
 Usage::
 
@@ -61,16 +61,18 @@ class Command(BaseCommand):
         user, created = User.objects.get_or_create(
             username=username,
         )
+        # The Department Adviser can use the PORTAL only: never staff / superuser. (The
+        # Super Admin who may open Django Administration is created by `seed_superadmin`.)
         user.is_admin = True
-        user.is_staff = True
-        user.is_superuser = True
+        user.is_staff = False
+        user.is_superuser = False
         user.set_password(password)
         user.save()
 
         verb = "Created" if created else "Updated"
         self.stdout.write(
             self.style.SUCCESS(
-                f"{verb} admin superuser '{username}' "
+                f"{verb} Department Adviser '{username}' (portal access only). "
                 "Remember to change the password."
             )
         )

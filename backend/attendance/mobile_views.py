@@ -71,7 +71,7 @@ class InstructorEventsView(generics.ListAPIView):
 class InstructorEventAttendanceView(APIView):
     """``GET /api/instructor/events/{id}/attendance/?date=YYYY-MM-DD``
 
-    The full class roster for one event-day: every approved student with the
+    The full class roster for one event-day: every student with the
     status of each required slot - PRESENT, ABSENT (window closed, no
     scan) or PENDING (window not closed yet, so not a miss). Read-only.
     """
@@ -119,17 +119,13 @@ class InstructorEventAttendanceView(APIView):
             if log.is_credited
         }
         roster = (
-            Student.objects.filter(approval_status=Student.ApprovalStatus.APPROVED)
+            Student.objects.all()
             .select_related("user")
             .order_by("user__last_name", "user__first_name", "student_number")
         )
 
         students = []
         for st in roster:
-            # Someone approved after this day wasn't enrolled yet (same rule as fines).
-            if st.reviewed_at and day < timezone.localtime(st.reviewed_at).date() \
-                    and not any((st.pk, s) in logs for s in slots_in_order):
-                continue
             cells, attended, missed = [], 0, 0
             for meta in slot_meta:
                 log = logs.get((st.pk, meta["type"]))
@@ -315,8 +311,6 @@ class StudentScopedMixin:
         ).first()
         if student is None:
             raise PermissionDenied("No student profile is linked to this account.")
-        if not student.is_approved:
-            raise PermissionDenied("Your registration has not been approved yet.")
         return student
 
 

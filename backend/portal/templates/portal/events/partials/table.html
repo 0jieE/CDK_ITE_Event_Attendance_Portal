@@ -20,7 +20,7 @@
           <td>{{ obj.semester }}</td>
           <td data-order="{{ obj.start_date|date:'Y-m-d' }}">{{ obj.start_date|date:"M d, Y" }}</td>
           <td data-order="{{ obj.end_date|date:'Y-m-d' }}">{{ obj.end_date|date:"M d, Y" }}</td>
-          <td>₱{{ obj.fine_rate }}</td>
+          <td>₱{{ obj.fine_rate }}{% if obj.day_fines.all %} <span class="badge text-bg-light border" title="{% for d in obj.day_fines.all %}{{ d.date|date:'M d' }}: ₱{{ d.fine_rate }}{% if not forloop.last %}, {% endif %}{% endfor %}">per-day</span>{% endif %}</td>
           <td>
             {% for t in obj.required_types %}<span class="badge text-bg-light border me-1">{{ t }}</span>{% endfor %}
           </td>

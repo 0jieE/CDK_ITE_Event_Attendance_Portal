@@ -23,6 +23,9 @@ if [ "${RUN_SETUP:-1}" = "1" ]; then
     echo "==> Ensuring the Department Adviser admin exists"
     python manage.py seed_admin --if-missing
 
+    echo "==> Ensuring the Super Admin exists (only if SUPERADMIN_PASSWORD is set)"
+    python manage.py seed_superadmin --if-missing
+
     echo "==> Checking Cloudinary media storage"
     # Creates the upload folders when configured; never blocks startup if the
     # credentials are wrong - uploads would fail loudly until they are fixed.

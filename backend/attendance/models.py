@@ -86,7 +86,8 @@ class Event(models.Model):
         max_digits=10,
         decimal_places=2,
         default=0,
-        help_text="Amount charged per missed required attendance slot.",
+        help_text="Default amount charged per missed required attendance slot "
+                  "(a day can override it - see EventDayFine).",
     )
     required_types = models.JSONField(
         default=default_required_types,
@@ -174,6 +175,20 @@ class Event(models.Model):
                 return slot
         return None
 
+    @property
+    def day_rates(self):
+        """``{iso-date: Decimal}`` of the days whose fine differs from ``fine_rate``."""
+        return {row.date.isoformat(): row.fine_rate for row in self.day_fines.all()}
+
+    def rate_map(self):
+        """``{date: Decimal}`` override lookup (dates, not strings) for fine maths."""
+        return {row.date: row.fine_rate for row in self.day_fines.all()}
+
+    def rate_for(self, day, overrides=None):
+        """Fine per missed slot on ``day``: the day's override, else ``fine_rate``."""
+        overrides = self.rate_map() if overrides is None else overrides
+        return overrides.get(day, self.fine_rate)
+
     def iter_dates(self):
         """Yield every :class:`~datetime.date` in ``[start_date, end_date]``."""
         from datetime import timedelta
@@ -182,6 +197,34 @@ class Event(models.Model):
         while current <= self.end_date:
             yield current
             current += timedelta(days=1)
+
+
+class EventDayFine(models.Model):
+    """A per-day fine rate for a multi-day event (overrides ``Event.fine_rate``)."""
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="day_fines")
+    date = models.DateField()
+    fine_rate = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        help_text="Amount charged per missed required slot on this day.",
+    )
+
+    class Meta:
+        ordering = ["date"]
+        constraints = [
+            models.UniqueConstraint(fields=["event", "date"], name="uniq_event_day_fine"),
+        ]
+
+    def __str__(self):
+        return f"{self.event.name} {self.date}: {self.fine_rate}"
+
+    def clean(self):
+        if self.event_id and self.date and not (
+            self.event.start_date <= self.date <= self.event.end_date
+        ):
+            raise ValidationError({"date": "The day must fall within the event's dates."})
+        if self.fine_rate is not None and self.fine_rate < 0:
+            raise ValidationError({"fine_rate": "A fine cannot be negative."})
 
 
 def generate_token():

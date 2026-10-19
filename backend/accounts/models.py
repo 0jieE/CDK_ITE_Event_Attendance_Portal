@@ -2,9 +2,8 @@
 
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
-from django.db import models, transaction
-from django.db.models.signals import post_delete
-from django.utils import timezone
+from django.db import models
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 from .images import image_url, normalise_image, profile_upload_to, validate_image_file
@@ -124,7 +123,9 @@ class User(AbstractUser):
     @property
     def role(self) -> str:
         """Human-readable primary role, used by serializers and the UI."""
-        if self.is_superuser or self.is_admin:
+        if self.is_superuser:
+            return "superadmin"
+        if self.is_admin:
             return "admin"
         if self.is_instructor:
             return "instructor"
@@ -169,55 +170,8 @@ class Student(models.Model):
     )
     section = models.CharField(max_length=20, blank=True)
 
-    class ApprovalStatus(models.TextChoices):
-        PENDING = "PENDING", "Pending approval"
-        APPROVED = "APPROVED", "Approved"
-        REJECTED = "REJECTED", "Rejected"
-
-    #: Students created by the adviser are APPROVED; self-registrations start PENDING
-    #: (with an inactive user) until the Department Adviser reviews them.
-    approval_status = models.CharField(
-        max_length=10,
-        choices=ApprovalStatus.choices,
-        default=ApprovalStatus.APPROVED,
-        db_index=True,
-    )
-    reviewed_at = models.DateTimeField(null=True, blank=True)
-    reviewed_by = models.ForeignKey(
-        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
-    )
-    rejection_reason = models.CharField(max_length=255, blank=True)
-
     class Meta:
         ordering = ["year_level", "section", "student_number"]
-
-    @property
-    def is_approved(self):
-        return self.approval_status == self.ApprovalStatus.APPROVED
-
-    @transaction.atomic
-    def approve(self, by=None):
-        """Approve a registration: the student can now sign in."""
-        self.approval_status = self.ApprovalStatus.APPROVED
-        self.reviewed_at = timezone.now()
-        self.reviewed_by = by
-        self.rejection_reason = ""
-        self.save(update_fields=["approval_status", "reviewed_at", "reviewed_by", "rejection_reason"])
-        if not self.user.is_active:
-            self.user.is_active = True
-            self.user.save(update_fields=["is_active"])
-
-    @transaction.atomic
-    def reject(self, by=None, reason=""):
-        """Reject a registration: the account stays inactive."""
-        self.approval_status = self.ApprovalStatus.REJECTED
-        self.reviewed_at = timezone.now()
-        self.reviewed_by = by
-        self.rejection_reason = (reason or "").strip()[:255]
-        self.save(update_fields=["approval_status", "reviewed_at", "reviewed_by", "rejection_reason"])
-        if self.user.is_active:
-            self.user.is_active = False
-            self.user.save(update_fields=["is_active"])
 
     def __str__(self):
         return f"{self.student_number} — {self.user.get_full_name() or self.user.username}"
@@ -234,3 +188,17 @@ def _delete_profile_image(sender, instance, **kwargs):
     """Remove a deleted user's photo from storage."""
     if instance.profile_image:
         instance.profile_image.storage.delete(instance.profile_image.name)
+
+
+@receiver(post_save, sender=User)
+def _ensure_instructor_profile(sender, instance, created, update_fields=None, **kwargs):
+    """A user flagged ``is_instructor`` always has the matching Instructor profile.
+
+    Without this, an instructor created on the Users page had no profile row, and
+    the Instructors page then refused the username as already taken.
+    """
+    if not instance.is_instructor:
+        return
+    if update_fields is not None and "is_instructor" not in update_fields:
+        return                                   # e.g. a last_login touch: nothing to do
+    Instructor.objects.get_or_create(user=instance)

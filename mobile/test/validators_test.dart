@@ -23,42 +23,6 @@ void main() {
     expect(validateRequired(' ok ', 'username'), isNull);
   });
 
-  group('sign-up validators', () {
-    test('student number', () {
-      expect(validateStudentNumber(' '), 'Enter your student number');
-      expect(validateStudentNumber('12'), isNotNull);
-      expect(validateStudentNumber(' 2024-0100 '), isNull);
-    });
-
-    test('username: required, no spaces, min length', () {
-      expect(validateUsername(''), isNotNull);
-      expect(validateUsername(null), isNotNull);
-      expect(validateUsername('ab'), isNotNull);
-      expect(validateUsername('ana reyes'), 'No spaces in a username');
-      expect(validateUsername('ana\treyes'), isNotNull);
-      expect(validateUsername(' ana.reyes '), isNull);
-    });
-
-    test('year level must be one of 1-4', () {
-      expect(validateYearLevel(null), isNotNull);
-      expect(validateYearLevel(''), isNotNull);
-      expect(validateYearLevel('5'), isNotNull);
-      for (final y in ['1', '2', '3', '4']) {
-        expect(validateYearLevel(y), isNull);
-      }
-      expect(yearLevels['1'], '1st Year');
-      expect(yearLevels['4'], '4th Year');
-    });
-
-    test('registration password: length and not all digits', () {
-      expect(validateRegistrationPassword(''), isNotNull);
-      expect(validateRegistrationPassword('short1'), isNotNull);
-      expect(validateRegistrationPassword('12345678'), isNotNull);
-      expect(validateRegistrationPassword('abcdefgh'), isNull);
-      expect(validateRegistrationPassword('S3cure-pass!'), isNull);
-    });
-  });
-
   test('password checks', () {
     expect(validateNewPassword(''), isNotNull);
     expect(validateNewPassword('short1'), isNotNull);

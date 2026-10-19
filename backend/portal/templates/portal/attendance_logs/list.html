@@ -8,6 +8,14 @@
     <h2 class="page-title">Attendance Logs</h2>
     <div class="page-sub"><i class="bi bi-info-circle"></i> Read-only &mdash; logs come from instructor scanning.</div>
   </div>
+  <div class="d-flex flex-wrap gap-2 no-print">
+    <a class="btn btn-outline-secondary btn-sm" id="logsCsv" href="?format=csv">
+      <i class="bi bi-filetype-csv"></i> Download CSV
+    </a>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+      <i class="bi bi-printer"></i> Print
+    </button>
+  </div>
 </div>
 
 <div class="card">
@@ -84,9 +92,19 @@
       </div>
     </form>
 
+    <h5 class="d-none d-print-block">Attendance Logs</h5>
     <div id="logs-table-container">
       {% include "portal/attendance_logs/partials/table.html" %}
     </div>
   </div>
 </div>
+<script>
+  // "Download CSV" exports exactly what the filters currently select.
+  document.getElementById('logsCsv').addEventListener('click', function (e) {
+    var form = document.querySelector('form[hx-target="#logs-table-container"]');
+    var p = new URLSearchParams(new FormData(form));
+    p.delete('partial'); p.set('format', 'csv');
+    this.href = '?' + p.toString();
+  });
+</script>
 {% endblock %}

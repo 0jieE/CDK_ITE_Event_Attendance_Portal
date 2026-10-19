@@ -5,6 +5,7 @@ from django.contrib import admin
 from .models import (
     AttendanceLog,
     Event,
+    EventDayFine,
     Fine,
     QRCode,
     Semester,
@@ -25,8 +26,14 @@ class SemesterAdmin(admin.ModelAdmin):
     search_fields = ("school_year__sy",)
 
 
+class EventDayFineInline(admin.TabularInline):
+    model = EventDayFine
+    extra = 0
+
+
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
+    inlines = [EventDayFineInline]
     list_display = (
         "name",
         "semester",

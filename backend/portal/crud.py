@@ -39,12 +39,15 @@ class CrudSection:
     order_by = None
     select_related = ()
 
+    #: Optional template with extra header buttons (rendered beside "Add ...").
+    actions_template = None
+
     can_add = True
     can_edit = True
     can_delete = True
 
     # -- queryset -----------------------------------------------------------
-    def get_queryset(self):
+    def get_queryset(self, request=None):
         qs = self.model._default_manager.all()
         if self.select_related:
             qs = qs.select_related(*self.select_related)
@@ -81,6 +84,7 @@ class CrudSection:
             "title": self.title,
             "singular": self.singular,
             "table_template": self.table_template,
+            "actions_template": self.actions_template,
             "refresh_event": self.refresh_event,
             "list_url": reverse(f"portal:{names['list']}"),
             "add_url": reverse(f"portal:{names['add']}") if self.can_add else None,
@@ -93,7 +97,7 @@ class CrudSection:
     # -- views --------------------------------------------------------------
     def list_view(self, request):
         ctx = self.base_context(request)
-        ctx["objects"] = self.get_queryset()
+        ctx["objects"] = self.get_queryset(request)
         # HTMX refreshes ask only for the table fragment.
         if is_htmx(request) and request.GET.get("partial") == "table":
             return render(request, self.table_template, ctx)
@@ -130,7 +134,7 @@ class CrudSection:
     def update_view(self, request, pk):
         from django.urls import reverse
 
-        instance = get_object_or_404(self.model, pk=pk)
+        instance = get_object_or_404(self.get_queryset(request), pk=pk)
         post_url = reverse(f"portal:{self.urlnames()['edit']}", args=[pk])
         title = f"Edit {self.singular}"
         if request.method == "POST":
@@ -154,7 +158,7 @@ class CrudSection:
         instance.delete()
 
     def delete_view(self, request, pk):
-        instance = get_object_or_404(self.model, pk=pk)
+        instance = get_object_or_404(self.get_queryset(request), pk=pk)
         label = str(instance)
         self.perform_delete(instance)
         return htmx_action_response(
