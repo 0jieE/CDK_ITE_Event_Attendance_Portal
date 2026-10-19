@@ -243,7 +243,6 @@ class AttendanceLog(models.Model):
 
     class Status(models.TextChoices):
         PRESENT = "PRESENT", "Present"
-        LATE = "LATE", "Late"
         ABSENT = "ABSENT", "Absent"
 
     student = models.ForeignKey(
@@ -279,8 +278,8 @@ class AttendanceLog(models.Model):
 
     @property
     def is_credited(self):
-        """True when this slot counts as attended (PRESENT or LATE)."""
-        return self.status in (self.Status.PRESENT, self.Status.LATE)
+        """True when this slot counts as attended (a scan inside its window = PRESENT)."""
+        return self.status == self.Status.PRESENT
 
 
 class Fine(models.Model):

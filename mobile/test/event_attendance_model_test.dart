@@ -55,7 +55,7 @@ void main() {
       expect(juan.photo, 'https://example.com/juan.jpg');
       expect(juan.slots[0].status, SlotStatus.absent);
       expect(juan.missed, 1);
-      expect(data.students[2].slots[0].status, SlotStatus.late);
+      expect(data.students[2].slots[0].status, SlotStatus.present);
     });
 
     test('empty photo string is treated as no photo', () {
@@ -75,18 +75,28 @@ void main() {
   group('SlotStatus', () {
     test('parse maps the API strings; unknown reads as pending', () {
       expect(SlotStatus.parse('PRESENT'), SlotStatus.present);
-      expect(SlotStatus.parse('LATE'), SlotStatus.late);
       expect(SlotStatus.parse('ABSENT'), SlotStatus.absent);
       expect(SlotStatus.parse('PENDING'), SlotStatus.pending);
       expect(SlotStatus.parse(null), SlotStatus.pending);
       expect(SlotStatus.parse('???'), SlotStatus.pending);
     });
 
-    test('code is the badge key and isAttended covers present + late', () {
-      expect(SlotStatus.late.code, 'LATE');
+    test('a stale "LATE" from an older server reads as present', () {
+      expect(SlotStatus.parse('LATE'), SlotStatus.present);
+      final j = sampleAttendanceJson();
+      ((j['students'] as List)[2]['slots'] as List)[0]['status'] = 'LATE';
+      final cell = EventAttendance.fromJson(j).students[2].slots[0];
+      expect(cell.status, SlotStatus.present);
+      expect(cell.status.code, 'PRESENT');
+      expect(cell.scannedAt, isNotNull);
+    });
+
+    test('code is the badge key and only present counts as attended', () {
+      expect(SlotStatus.present.code, 'PRESENT');
       expect(SlotStatus.pending.code, 'PENDING');
+      expect(SlotStatus.values.map((s) => s.name),
+          ['present', 'absent', 'pending']);
       expect(SlotStatus.present.isAttended, isTrue);
-      expect(SlotStatus.late.isAttended, isTrue);
       expect(SlotStatus.absent.isAttended, isFalse);
       expect(SlotStatus.pending.isAttended, isFalse);
     });

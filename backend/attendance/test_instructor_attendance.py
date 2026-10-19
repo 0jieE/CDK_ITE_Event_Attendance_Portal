@@ -84,7 +84,7 @@ class InstructorAttendanceTests(TestCase):
         ev = make_event(self.today - D(days=3), self.today - D(days=2))
         day = self.today - D(days=3)
         scan(self.anna, ev, day, "AM_IN")
-        scan(self.anna, ev, day, "PM_OUT", status="LATE")
+        scan(self.anna, ev, day, "PM_OUT")
         scan(self.ben, ev, day, "AM_IN")
         data = self.url(ev, date=str(day)).json()
         self.assertEqual(data["date"], str(day))
@@ -97,7 +97,7 @@ class InstructorAttendanceTests(TestCase):
         self.assertEqual((data["slots"][0]["present"], data["slots"][0]["absent"]), (2, 0))
         self.assertEqual((data["slots"][1]["present"], data["slots"][1]["absent"], data["slots"][1]["pending"]), (1, 1, 0))
         by_name = {s["full_name"]: s for s in data["students"]}
-        self.assertEqual([c["status"] for c in by_name["Anna Reyes"]["slots"]], ["PRESENT", "LATE"])
+        self.assertEqual([c["status"] for c in by_name["Anna Reyes"]["slots"]], ["PRESENT", "PRESENT"])
         self.assertEqual((by_name["Anna Reyes"]["attended"], by_name["Anna Reyes"]["missed"]), (2, 0))
         self.assertEqual([c["status"] for c in by_name["Ben Abad"]["slots"]], ["PRESENT", "ABSENT"])
         self.assertEqual((by_name["Ben Abad"]["attended"], by_name["Ben Abad"]["missed"]), (1, 1))

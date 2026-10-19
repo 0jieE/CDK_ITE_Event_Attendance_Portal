@@ -50,8 +50,7 @@ Enum attendance_type {
 }
 
 Enum attendance_status {
-  PRESENT [note: 'Scanned inside the slot window']
-  LATE    [note: 'Reserved - not produced today (in-window = PRESENT)']
+  PRESENT [note: 'Scanned inside the slot window (scanned_at holds the time)']
   ABSENT  [note: 'No scan; derived, normally no row is stored']
 }
 
@@ -206,7 +205,7 @@ Table attendance_fine [headercolor: #f5b301] {
     (student_id, event_id) [unique, note: 'One fine ledger entry per student per event']
   }
 
-  Note: 'Ledger only. Computed by the fines calculator from required slots that have elapsed and have no PRESENT/LATE scan.'
+  Note: 'Ledger only. Computed by the fines calculator from required slots that have elapsed and have no PRESENT scan.'
 }
 
 // -------------------------------------------------------------- portal ---

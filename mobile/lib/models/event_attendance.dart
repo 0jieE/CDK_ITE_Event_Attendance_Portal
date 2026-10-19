@@ -3,19 +3,18 @@ import '../utils/manila_time.dart';
 /// Status of one student in one slot (the backend's `status` strings).
 enum SlotStatus {
   present,
-  late,
   absent,
 
   /// The slot's scan window hasn't closed yet — not a miss.
   pending;
 
   /// Unknown/missing values read as [pending] (never as a false "absent").
+  /// A stale "LATE" from an older/cached server response reads as [present].
   static SlotStatus parse(String? raw) {
     switch (raw) {
       case 'PRESENT':
-        return SlotStatus.present;
       case 'LATE':
-        return SlotStatus.late;
+        return SlotStatus.present;
       case 'ABSENT':
         return SlotStatus.absent;
       default:
@@ -26,8 +25,8 @@ enum SlotStatus {
   /// The backend spelling — also the key [BrandColors.badge] understands.
   String get code => name.toUpperCase();
 
-  /// Counts as attended (PRESENT or LATE).
-  bool get isAttended => this == present || this == late;
+  /// Counts as attended (scanned inside the window).
+  bool get isAttended => this == present;
 }
 
 /// The few event fields the attendance endpoint echoes back.

@@ -30,6 +30,10 @@ class AppTheme {
   static const Color danger = Color(0xFFB02A37);
   static const Color dangerTint = Color(0xFFFDE7E9);
 
+  /// Amber for informational / "heads up" states (e.g. the scanner's
+  /// "Already recorded" card, the Upcoming event chip) - white text on top.
+  static const Color warning = Color(0xFF9A5B00);
+
   // Dark-mode counterparts.
   static const Color _darkBackground = Color(0xFF0E140F);
   static const Color _darkSurface = Color(0xFF18211A);
@@ -52,8 +56,8 @@ class AppTheme {
     muted: muted,
     presentBg: Color(0xFFE3F5DC),
     presentFg: Color(0xFF1E6B0F),
-    lateBg: Color(0xFFFFF1D6),
-    lateFg: Color(0xFF8A5A00),
+    warningBg: Color(0xFFFFF1D6),
+    warningFg: Color(0xFF8A5A00),
     absentBg: dangerTint,
     absentFg: danger,
     neutralBg: Color(0xFFE9EEE9),
@@ -67,8 +71,8 @@ class AppTheme {
     muted: _darkMuted,
     presentBg: Color(0xFF1F3A21),
     presentFg: Color(0xFF8FE274),
-    lateBg: Color(0xFF3F3014),
-    lateFg: Color(0xFFFFCB66),
+    warningBg: Color(0xFF3F3014),
+    warningFg: Color(0xFFFFCB66),
     absentBg: Color(0xFF42191D),
     absentFg: Color(0xFFFF9BA4),
     neutralBg: Color(0xFF252F27),
@@ -315,8 +319,6 @@ class AppTheme {
       case 'PRESENT':
       case 'PAID':
         return greenText;
-      case 'LATE':
-        return const Color(0xFF9A5B00);
       case 'ABSENT':
       case 'UNPAID':
         return danger;
@@ -340,7 +342,7 @@ class BrandColors extends ThemeExtension<BrandColors> {
   /// Secondary text.
   final Color muted;
   final Color presentBg, presentFg;
-  final Color lateBg, lateFg;
+  final Color warningBg, warningFg;
   final Color absentBg, absentFg;
   final Color neutralBg, neutralFg;
 
@@ -351,22 +353,23 @@ class BrandColors extends ThemeExtension<BrandColors> {
     required this.muted,
     required this.presentBg,
     required this.presentFg,
-    required this.lateBg,
-    required this.lateFg,
+    required this.warningBg,
+    required this.warningFg,
     required this.absentBg,
     required this.absentFg,
     required this.neutralBg,
     required this.neutralFg,
   });
 
-  /// Soft pill colours for a status (PRESENT/LATE/ABSENT/PAID/UNPAID).
+  /// Soft pill colours for a status (PRESENT/ABSENT/PAID/UNPAID, plus amber
+  /// UPCOMING for events that haven't started).
   ({Color bg, Color fg}) badge(String status) {
     switch (status) {
       case 'PRESENT':
       case 'PAID':
         return (bg: presentBg, fg: presentFg);
-      case 'LATE':
-        return (bg: lateBg, fg: lateFg);
+      case 'UPCOMING':
+        return (bg: warningBg, fg: warningFg);
       case 'ABSENT':
       case 'UNPAID':
         return (bg: absentBg, fg: absentFg);
@@ -384,8 +387,8 @@ class BrandColors extends ThemeExtension<BrandColors> {
       muted: muted ?? this.muted,
       presentBg: presentBg,
       presentFg: presentFg,
-      lateBg: lateBg,
-      lateFg: lateFg,
+      warningBg: warningBg,
+      warningFg: warningFg,
       absentBg: absentBg,
       absentFg: absentFg,
       neutralBg: neutralBg,
@@ -404,8 +407,8 @@ class BrandColors extends ThemeExtension<BrandColors> {
       muted: l(muted, other.muted),
       presentBg: l(presentBg, other.presentBg),
       presentFg: l(presentFg, other.presentFg),
-      lateBg: l(lateBg, other.lateBg),
-      lateFg: l(lateFg, other.lateFg),
+      warningBg: l(warningBg, other.warningBg),
+      warningFg: l(warningFg, other.warningFg),
       absentBg: l(absentBg, other.absentBg),
       absentFg: l(absentFg, other.absentFg),
       neutralBg: l(neutralBg, other.neutralBg),

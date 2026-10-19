@@ -223,7 +223,7 @@ class _EventTile extends StatelessWidget {
       case EventStatus.ongoing:
         return StatusChip('PRESENT', label: s.label);
       case EventStatus.upcoming:
-        return StatusChip('LATE', label: s.label);
+        return StatusChip('UPCOMING', label: s.label);
       case EventStatus.finished:
         return StatusChip('FINISHED', label: s.label);
     }

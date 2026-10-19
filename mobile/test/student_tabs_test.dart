@@ -64,7 +64,7 @@ void main() {
         return json({
           'results': [
             logJson(1, day(-1), 'AM_IN', 'AM Time-In', 'LATE',
-                '${day(-1)}T08:20:00+08:00'),
+                '${day(-1)}T08:20:00+08:00'), // stale server value -> Present
             logJson(2, day(0), 'AM_OUT', 'AM Time-Out', 'PRESENT',
                 '${day(0)}T11:45:00+08:00'),
             logJson(3, day(0), 'AM_IN', 'AM Time-In', 'PRESENT',
@@ -96,8 +96,9 @@ void main() {
     final yesterdayAmIn = tester.getTopLeft(find.text('AM Time-In').last).dy;
     expect(amIn < amOut, isTrue);
     expect(amOut < yesterdayAmIn, isTrue);
-    expect(find.text('Late'), findsOneWidget);
-    expect(find.text('Present'), findsNWidgets(2));
+    // A stale "LATE" from the server reads as Present: no Late anywhere.
+    expect(find.textContaining('Late'), findsNothing);
+    expect(find.text('Present'), findsNWidgets(3));
     expect(find.text('7:30 AM'), findsOneWidget);
 
     // Switch to "All events": request has no event filter.

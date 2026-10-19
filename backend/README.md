@@ -187,7 +187,7 @@ alert on the dashboard show how many are waiting).
 | `GET /api/me/` | any user | identity, role flags and `profile_image` (used to route the app) |
 | `POST/DELETE /api/me/photo/` | any user | set (multipart `image`) / remove **own** profile photo |
 | `GET /api/instructor/events/` | instructor | active events running today (`?all=true`: **every** event, newest first) |
-| `GET /api/instructor/events/{id}/attendance/` (`?date=`) | instructor | read-only class roster for one event-day: every approved student with PRESENT / LATE / ABSENT / PENDING per required slot, plus per-slot totals |
+| `GET /api/instructor/events/{id}/attendance/` (`?date=`) | instructor | read-only class roster for one event-day: every approved student with PRESENT / ABSENT / PENDING per required slot, plus per-slot totals |
 | `POST /api/instructor/scan/` | instructor | scan a QR token; result includes `student_photo`. Rate-limited |
 | `GET /api/instructor/scans/` | instructor | the instructor's own recent scans |
 | `GET /api/student/profile/` | student | own profile incl. name, username, year/section, photo |
@@ -284,7 +284,7 @@ Two toggle views plus the calculate/mark-paid workflow:
 * **By Student** — pick a student **and** an event to see that student's **daily
   attendance grid**: one row per event-day with AM-IN / AM-OUT / PM-IN / PM-OUT
   columns — `–` when the slot isn't required, **Absent** when no scan exists,
-  else **Present/Late** — plus the computed fine and a Mark-Paid action.
+  else **Present** — plus the computed fine and a Mark-Paid action.
 
 > **Students** now carry a **year level** (1st–4th) and a **section**; both are
 > editable on the student form and drive the year/section filters above.
@@ -393,8 +393,8 @@ the synchronous fallback keeps things working.
 * **Time-gated scanning.** `POST /api/instructor/scan/` resolves the slot via
   `Event.slot_for_time(now)`; an in-window scan records that slot as `PRESENT`.
   Scanning outside every window is rejected (`OUTSIDE_WINDOW`) — the slot stays
-  absent and is auto-fined. There is **no LATE** (in-window = present, outside =
-  absent).
+  absent and is auto-fined. There is no "late" status: an in-window scan is
+  `PRESENT` and its exact scan time is stored on the log; outside the window = absent.
 * **Fines are a ledger only** (no payment gateway). `compute_fines_for_event`
   counts missed required slots × `fine_rate`, is **idempotent**, and never
   overwrites an already-`PAID` fine — it flags it (`needs_review`) instead.
@@ -474,6 +474,5 @@ All phases are **done**:
 * **Mobile APIs** + **Flutter app** (`../mobile`, instructor + student, profile photos) — Phase 3.
 * **Deployment & hardening** (Docker, Render, throttling, HTTPS switch, `SECURITY.md`) — Phase 4.
 
-Possible future work: a per-slot LATE threshold (currently in-window = Present, outside =
-absent); per-date scan windows (currently one schedule per event); an in-app photo-upload
+Possible future work: per-date scan windows (currently one schedule per event); an in-app photo-upload
 screen (the `/api/me/photo/` endpoint is ready).

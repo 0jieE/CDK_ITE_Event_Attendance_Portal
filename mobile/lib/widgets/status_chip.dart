@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Soft pill badge for a status: Present = green tint, Late = amber tint,
-/// Absent = red tint (PAID/UNPAID follow green/red).
+/// Soft pill badge for a status: Present = green tint, Absent = red tint
+/// (PAID/UNPAID follow green/red, UPCOMING = amber tint).
 class StatusChip extends StatelessWidget {
   final String status;
   final String? label;

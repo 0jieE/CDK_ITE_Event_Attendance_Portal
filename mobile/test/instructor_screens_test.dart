@@ -121,7 +121,8 @@ void main() {
         expect(find.text('DEMO-001 · 2nd Year A'), findsOneWidget);
         expect(find.text('AM-In · 7:12 AM'), findsOneWidget);
         expect(find.text('AM-In · Absent'), findsOneWidget);
-        expect(find.text('AM-In · 7:50 AM · Late'), findsOneWidget);
+        expect(find.text('AM-In · 7:50 AM'), findsOneWidget);
+        expect(find.textContaining('Late'), findsNothing);
         expect(find.text('AM-Out · Pending'), findsNWidgets(3));
         expect(find.text('All 3'), findsOneWidget);
         expect(find.text('Missing 1'), findsOneWidget);
@@ -130,6 +131,26 @@ void main() {
         expect(find.textContaining("hasn't started"), findsNothing);
       },
     );
+
+    testWidgets('a stale "LATE" from the server renders as a Present pill', (
+      tester,
+    ) async {
+      bigScreen(tester);
+      final b = backend(
+        handler: (_) {
+          final j = sampleAttendanceJson();
+          ((j['students'] as List)[2]['slots'] as List)[0]['status'] = 'LATE';
+          return json(j);
+        },
+      );
+      await tester.pumpWidget(
+        app(b.api, EventAttendanceScreen(event: event, clock: morning)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('AM-In · 7:50 AM'), findsOneWidget);
+      expect(find.textContaining('Late'), findsNothing);
+      expect(find.textContaining('LATE'), findsNothing);
+    });
 
     testWidgets('an open window is labelled "Open" and not dimmed away', (
       tester,
@@ -478,6 +499,13 @@ void main() {
       expect(find.text('Ongoing'), findsOneWidget);
       expect(find.text('Upcoming'), findsOneWidget);
       expect(find.text('Finished'), findsOneWidget);
+      expect(find.textContaining('Late'), findsNothing);
+
+      // The Upcoming chip keeps its amber look.
+      final brand = AppTheme.light.extension<BrandColors>()!;
+      final upcomingChip = tester.widget<Container>(find.ancestor(
+          of: find.text('Upcoming'), matching: find.byType(Container)).first);
+      expect((upcomingChip.decoration as BoxDecoration).color, brand.warningBg);
 
       // Search by name.
       await tester.enterText(find.byType(TextField), 'summit');

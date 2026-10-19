@@ -41,7 +41,7 @@ Map<String, dynamic> studentJson(
   'year_section': yearSection,
   'photo': photo,
   'attended': cells
-      .where((c) => c['status'] == 'PRESENT' || c['status'] == 'LATE')
+      .where((c) => c['status'] == 'PRESENT')
       .length,
   'missed': cells.where((c) => c['status'] == 'ABSENT').length,
   'slots': cells,
@@ -52,7 +52,7 @@ Map<String, dynamic> studentJson(
 ///
 ///  * DEMO-001 Maria Santos: AM-In present 07:12, AM-Out pending / present
 ///  * DEMO-002 Juan Dela Cruz (has a photo): AM-In absent, AM-Out pending / absent
-///  * DEMO-003 Ana Reyes: AM-In late 07:50, AM-Out pending / absent
+///  * DEMO-003 Ana Reyes: AM-In present 07:50, AM-Out pending / absent
 Map<String, dynamic> sampleAttendanceJson({
   String date = '2026-10-08',
   List<String> dates = const ['2026-10-06', '2026-10-08', '2026-10-10'],
@@ -96,7 +96,7 @@ Map<String, dynamic> sampleAttendanceJson({
         cellJson('AM_OUT', second),
       ], photo: 'https://example.com/juan.jpg'),
       studentJson(7, 'DEMO-003', 'Ana Reyes', [
-        cellJson('AM_IN', 'LATE', '2026-10-08T07:50:00+08:00'),
+        cellJson('AM_IN', 'PRESENT', '2026-10-08T07:50:00+08:00'),
         cellJson('AM_OUT', second),
       ]),
     ],

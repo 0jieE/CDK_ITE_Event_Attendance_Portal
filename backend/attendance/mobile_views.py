@@ -72,7 +72,7 @@ class InstructorEventAttendanceView(APIView):
     """``GET /api/instructor/events/{id}/attendance/?date=YYYY-MM-DD``
 
     The full class roster for one event-day: every approved student with the
-    status of each required slot - PRESENT / LATE, ABSENT (window closed, no
+    status of each required slot - PRESENT, ABSENT (window closed, no
     scan) or PENDING (window not closed yet, so not a miss). Read-only.
     """
 
@@ -239,7 +239,7 @@ class InstructorScanView(APIView):
                 http_status=200, request=request,
             )
 
-        # In-window scan = PRESENT (no LATE: outside the window is simply absent).
+        # In-window scan = PRESENT (the scan time is stored; outside the window is simply absent).
         instructor = Instructor.objects.filter(user=request.user).first()
         if log is None:
             log = AttendanceLog(

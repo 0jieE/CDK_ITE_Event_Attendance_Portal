@@ -20,8 +20,8 @@ from .models import AttendanceLog, Event, Fine
 
 logger = logging.getLogger(__name__)
 
-# Statuses that count as "the student attended this slot".
-CREDITED = (AttendanceLog.Status.PRESENT, AttendanceLog.Status.LATE)
+# Statuses that count as "the student attended this slot" (scan time is recorded on the log).
+CREDITED = (AttendanceLog.Status.PRESENT,)
 
 # Cache key + default minimum gap for the on-view automatic fines refresh.
 _REFRESH_KEY = "fines:last-refresh"
@@ -53,7 +53,7 @@ def compute_fines_for_event(event, as_of=None, now=None):
     A *slot* is one ``(date, attendance_type)`` pair for a required type on a
     date within ``[start_date, end_date]``.  A slot is **missed** when it has
     *elapsed* (see :func:`slot_has_elapsed`) and there is no
-    :class:`AttendanceLog` with status ``PRESENT`` or ``LATE`` for that
+    :class:`AttendanceLog` with status ``PRESENT`` for that
     student / event / date / type.  So the fine is ``missed slots x fine_rate``:
     per required attendance, never per day.
 
@@ -85,7 +85,7 @@ def compute_fines_for_event(event, as_of=None, now=None):
         if slot_has_elapsed(event, d, t, now)
     ]
 
-    # All credited (present/late) logs for this event, indexed for O(1) lookup.
+    # All credited (present) logs for this event, indexed for O(1) lookup.
     credited_keys = set(
         AttendanceLog.objects.filter(event=event, status__in=CREDITED).values_list(
             "student_id", "date", "attendance_type"
@@ -267,7 +267,6 @@ def attendance_report(*, semester=None, event=None, date_from=None, date_to=None
         agg = logs.aggregate(
             total=Count("id"),
             present=Count("id", filter=Q(status=AttendanceLog.Status.PRESENT)),
-            late=Count("id", filter=Q(status=AttendanceLog.Status.LATE)),
             absent=Count("id", filter=Q(status=AttendanceLog.Status.ABSENT)),
         )
         rows.append(
@@ -279,9 +278,7 @@ def attendance_report(*, semester=None, event=None, date_from=None, date_to=None
                 "end_date": ev.end_date,
                 "total_logs": agg["total"] or 0,
                 "present": agg["present"] or 0,
-                "late": agg["late"] or 0,
                 "absent": agg["absent"] or 0,
-                "attendance_rate": _attendance_rate(logs),
             }
         )
     return rows

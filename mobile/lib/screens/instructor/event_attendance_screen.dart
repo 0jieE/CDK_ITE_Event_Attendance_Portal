@@ -15,7 +15,7 @@ import '../../widgets/profile_avatar.dart';
 import '../../widgets/state_message.dart';
 
 /// The class roster of one event: pick a day, see per-slot totals, then every
-/// student's PRESENT / LATE / ABSENT / PENDING result for each required slot.
+/// student's PRESENT / ABSENT / PENDING result for each required slot.
 class EventAttendanceScreen extends StatefulWidget {
   final Event event;
 
@@ -742,7 +742,7 @@ class _StudentRow extends StatelessWidget {
   }
 }
 
-/// Soft status pill for one slot: green Present, amber Late, red Absent,
+/// Soft status pill for one slot: green Present, red Absent,
 /// grey Pending. The status word / scan time keeps it readable without colour.
 class _SlotPill extends StatelessWidget {
   final SlotCell cell;
@@ -758,9 +758,6 @@ class _SlotPill extends StatelessWidget {
       case SlotStatus.present:
         text = at != null ? formatScanTime(at) : 'Present';
         icon = Icons.check_circle;
-      case SlotStatus.late:
-        text = at != null ? '${formatScanTime(at)} · Late' : 'Late';
-        icon = Icons.watch_later;
       case SlotStatus.absent:
         text = 'Absent';
         icon = Icons.cancel;

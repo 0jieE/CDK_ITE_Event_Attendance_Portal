@@ -1,6 +1,6 @@
 {% comment %}
 By-Student daily attendance detail (one chosen student + event).
-Cell shows '–' when the slot isn't required, 'Absent' when no scan, else Present/Late.
+Cell shows '–' when the slot isn't required, 'Pending' while open, 'Absent' when no scan, else Present.
 {% endcomment %}
 {% if not student_obj or not event_obj %}
   <div class="text-center text-muted py-5">
@@ -56,7 +56,6 @@ Cell shows '–' when the slot isn't required, 'Absent' when no scan, else Prese
               <td>
                 {% if cell.kind == 'na' %}<span class="text-muted">{{ cell.value }}</span>
                 {% elif cell.kind == 'present' %}<span class="badge text-bg-success">{{ cell.value }}</span>
-                {% elif cell.kind == 'late' %}<span class="badge text-bg-warning">{{ cell.value }}</span>
                 {% elif cell.kind == 'pending' %}<span class="badge text-bg-secondary">{{ cell.value }}</span>
                 {% else %}<span class="badge text-bg-danger">{{ cell.value }}</span>{% endif %}
               </td>
@@ -68,7 +67,6 @@ Cell shows '–' when the slot isn't required, 'Absent' when no scan, else Prese
   </div>
   <p class="text-muted small mt-2 mb-0">
     <span class="badge text-bg-success">Present</span>
-    <span class="badge text-bg-warning">Late</span>
     <span class="badge text-bg-danger">Absent</span> = missed required slot ·
     <span class="badge text-bg-secondary">Pending</span> = slot not closed yet ·
     <span class="text-muted">–</span> = not required

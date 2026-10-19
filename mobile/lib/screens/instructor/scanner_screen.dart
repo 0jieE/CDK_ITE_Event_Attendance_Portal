@@ -137,7 +137,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
               left: 12,
               right: 12,
               bottom: 24,
-              child: _ResultCard(result: _result!, onDismiss: _clearResult),
+              child: ScanResultCard(result: _result!, onDismiss: _clearResult),
             ),
         ],
       ),
@@ -145,10 +145,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
   }
 }
 
-class _ResultCard extends StatelessWidget {
+/// The coloured card shown after each scan (public so widget tests can render
+/// it without a camera).
+class ScanResultCard extends StatelessWidget {
   final ScanResult result;
   final VoidCallback onDismiss;
-  const _ResultCard({required this.result, required this.onDismiss});
+  const ScanResultCard({super.key, required this.result, required this.onDismiss});
 
   @override
   Widget build(BuildContext context) {
@@ -215,7 +217,7 @@ class _ResultCard extends StatelessWidget {
       return (AppTheme.statusColor('ABSENT'), Icons.cancel, _failTitle());
     }
     if (!result.created) {
-      return (AppTheme.statusColor('LATE'), Icons.info, 'Already recorded');
+      return (AppTheme.warning, Icons.info, 'Already recorded');
     }
     return (AppTheme.statusColor('PRESENT'), Icons.check_circle, 'Recorded');
   }

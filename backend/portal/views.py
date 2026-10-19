@@ -327,7 +327,7 @@ def _build_attendance_grid(student, event):
 
     Returns a list of rows ``{date, cells:[{slot_label, value, kind}]}`` where
     each cell is ``–`` when the slot isn't required, ``Pending`` while the slot
-    hasn't closed yet, ``Absent`` when it closed with no scan, else Present/Late.
+    hasn't closed yet, ``Absent`` when it closed with no scan, else Present.
     """
     required = set(event.required_types or [])
     now = timezone.localtime()

@@ -22,8 +22,7 @@
           <tr>
             <th>Event</th><th>Semester</th><th>Start</th><th>End</th>
             <th class="text-end">Total</th><th class="text-end">Present</th>
-            <th class="text-end">Late</th><th class="text-end">Absent</th>
-            <th class="text-end">Rate</th>
+            <th class="text-end">Absent</th>
           </tr>
         </thead>
         <tbody>
@@ -35,12 +34,10 @@
               <td>{{ r.end_date|date:"M d, Y" }}</td>
               <td class="text-end">{{ r.total_logs }}</td>
               <td class="text-end">{{ r.present }}</td>
-              <td class="text-end">{{ r.late }}</td>
               <td class="text-end">{{ r.absent }}</td>
-              <td class="text-end">{{ r.attendance_rate|floatformat:2 }}</td>
             </tr>
           {% empty %}
-            <tr><td colspan="9" class="text-center text-muted py-4">No data for the selected filters.</td></tr>
+            <tr><td colspan="7" class="text-center text-muted py-4">No data for the selected filters.</td></tr>
           {% endfor %}
         </tbody>
       </table>

@@ -16,7 +16,6 @@
           <td>{{ log.get_attendance_type_display }}</td>
           <td>
             {% if log.status == 'PRESENT' %}<span class="badge text-bg-success">Present</span>
-            {% elif log.status == 'LATE' %}<span class="badge text-bg-warning">Late</span>
             {% else %}<span class="badge text-bg-danger">Absent</span>{% endif %}
           </td>
           <td data-order="{{ log.scanned_at|date:'U' }}">{{ log.scanned_at|date:"M d, Y g:i A"|default:"—" }}</td>

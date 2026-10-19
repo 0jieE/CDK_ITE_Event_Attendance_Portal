@@ -6,7 +6,7 @@ class AttendanceLog {
   final DateTime date;
   final String attendanceType;
   final String attendanceTypeDisplay;
-  final String status; // PRESENT | LATE | ABSENT
+  final String status; // PRESENT | ABSENT
   final DateTime? scannedAt;
 
   const AttendanceLog({
@@ -28,14 +28,18 @@ class AttendanceLog {
       date: DateTime.parse(json['date'] as String),
       attendanceType: json['attendance_type'] as String? ?? '',
       attendanceTypeDisplay: json['attendance_type_display'] as String? ?? '',
-      status: json['status'] as String? ?? 'ABSENT',
+      status: _parseStatus(json['status'] as String?),
       scannedAt: json['scanned_at'] != null
           ? DateTime.tryParse(json['scanned_at'] as String)
           : null,
     );
   }
 
+  /// Only PRESENT or ABSENT exist. A stale "LATE" from an older/cached server
+  /// response is read as PRESENT (the student did scan inside the window).
+  static String _parseStatus(String? raw) =>
+      (raw == 'PRESENT' || raw == 'LATE') ? 'PRESENT' : 'ABSENT';
+
   bool get isPresent => status == 'PRESENT';
-  bool get isLate => status == 'LATE';
   bool get isAbsent => status == 'ABSENT';
 }
