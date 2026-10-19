@@ -197,3 +197,77 @@ class SchemaLinkTests(TestCase):
             link = html[html.index(self.URL) - 20: html.index(self.URL) + 200]
             self.assertIn('target="_blank"', link)
             self.assertIn('rel="noopener noreferrer"', link)
+
+
+class ScanWindowVisibilityTests(TestCase):
+    """Scan windows belong to a required type: grouped per slot, only the ticked ones are used."""
+
+    SLOTS = {"am_in": "AM_IN", "am_out": "AM_OUT", "pm_in": "PM_IN", "pm_out": "PM_OUT"}
+
+    def setUp(self):
+        adv = get_user_model().objects.create_user("advw", password="x", is_admin=True, is_staff=True)
+        self.client.force_login(adv)
+        sy = SchoolYear.objects.create(sy="2026-2027")
+        self.sem = Semester.objects.create(school_year=sy, name="1st")
+
+    def post(self, **over):
+        data = {"name": "Windows test", "semester": self.sem.pk, "start_date": "2026-11-02",
+                "end_date": "2026-11-03", "fine_rate": "10", "is_active": "on"}
+        data.update(over)
+        return self.client.post(reverse("portal:events-add"), data)
+
+    def test_every_window_field_is_tagged_with_its_slot_and_a_hint_is_present(self):
+        html = self.client.get(reverse("portal:events-add")).content.decode()
+        for prefix, slot in self.SLOTS.items():
+            for suffix in ("start", "end"):
+                chunk = html[html.index(f'id="id_{prefix}_{suffix}"') - 600: html.index(f'id="id_{prefix}_{suffix}"')]
+                self.assertIn("slot-window", chunk, prefix)
+                self.assertIn(f'data-slot="{slot}"', chunk, f"{prefix}_{suffix}")
+        self.assertIn("scan-windows-head", html)
+        self.assertIn("scan-windows-hint", html)
+        self.assertIn("Choose the required types above", html)
+
+    def test_only_the_selected_types_need_and_keep_a_window(self):
+        res = self.post(required_types=["AM_IN", "PM_OUT"], am_in_start="07:00", am_in_end="08:00",
+                        pm_out_start="16:30", pm_out_end="17:15")
+        self.assertEqual(res.status_code, 204, res.content[:300])
+        ev = Event.objects.get(name="Windows test")
+        self.assertEqual(ev.required_types, ["AM_IN", "PM_OUT"])
+        self.assertEqual((str(ev.am_in_start), str(ev.pm_out_end)), ("07:00:00", "17:15:00"))
+        for f in ("am_out_start", "am_out_end", "pm_in_start", "pm_in_end"):
+            self.assertIsNone(getattr(ev, f), f)
+
+    def test_stale_windows_of_unselected_types_are_dropped_not_saved_or_validated(self):
+        # AM_OUT is not required, yet its fields arrive (even an invalid end<=start): ignored.
+        res = self.post(required_types=["AM_IN"], am_in_start="07:00", am_in_end="08:00",
+                        am_out_start="12:00", am_out_end="11:00")
+        self.assertEqual(res.status_code, 204, res.content[:300])
+        ev = Event.objects.get(name="Windows test")
+        self.assertIsNone(ev.am_out_start)
+        self.assertIsNone(ev.am_out_end)
+
+    def test_a_selected_type_without_a_window_is_rejected_on_its_visible_field(self):
+        res = self.post(required_types=["AM_IN", "PM_OUT"], am_in_start="07:00", am_in_end="08:00")
+        self.assertEqual(res.status_code, 422)
+        html = res.content.decode()
+        self.assertIn("PM Time-Out", html)                         # the error names the slot
+        self.assertFalse(Event.objects.filter(name="Windows test").exists())
+        # the ticked types stay ticked and their windows keep what was typed
+        self.assertRegex(html, r'value="AM_IN"[^>]*checked')
+        self.assertIn('value="07:00"', html)
+
+    def test_editing_shows_saved_windows_for_the_required_types(self):
+        ev = Event.objects.create(
+            name="Saved", semester=self.sem, start_date="2026-11-02", end_date="2026-11-02",
+            required_types=["AM_IN", "PM_OUT"], am_in_start="07:00", am_in_end="08:00",
+            pm_out_start="16:30", pm_out_end="17:15")
+        html = self.client.get(reverse("portal:events-edit", args=[ev.pk])).content.decode()
+        self.assertIn('value="07:00"', html)
+        self.assertIn('value="17:15"', html)
+        self.assertRegex(html, r'value="AM_IN"[^>]*checked')
+        self.assertNotRegex(html, r'value="AM_OUT"[^>]*checked')
+
+    def test_the_visibility_script_ships_with_every_portal_page(self):
+        html = self.client.get(reverse("portal:events-list")).content.decode()
+        self.assertIn("function syncScanWindows", html)
+        self.assertIn("htmx:afterSwap", html)

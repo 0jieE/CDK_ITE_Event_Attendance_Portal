@@ -109,6 +109,13 @@ class EventForm(BootstrapModelForm):
         start, end = cleaned.get("start_date"), cleaned.get("end_date")
         if start and end and end < start:
             self.add_error("end_date", "End date must be on or after the start date.")
+        # A slot that isn't required has no scan window: drop any stale times so they
+        # can't be saved (or trip validation) invisibly.
+        required = set(cleaned.get("required_types") or [])
+        for slot, (start_field, end_field) in Event.SLOT_TIME_FIELDS.items():
+            if slot not in required:
+                cleaned[start_field] = None
+                cleaned[end_field] = None
         return cleaned
 
 

@@ -20,9 +20,14 @@ and text areas) always span the full row.
     {{ field }}
   {% else %}
     {% if field.name == 'am_in_start' %}
-      <div class="col-12">
+      {# Scan windows appear only for the required types that are ticked (see syncScanWindows in base.html). #}
+      <div class="col-12 scan-windows-head">
         <div class="form-section"><i class="bi bi-clock"></i> Scan windows</div>
         {% if field.help_text %}<div class="form-text mt-2">{{ field.help_text }}</div>{% endif %}
+      </div>
+      <div class="col-12 scan-windows-hint">
+        <div class="form-section"><i class="bi bi-clock"></i> Scan windows</div>
+        <div class="form-text mt-2"><i class="bi bi-info-circle"></i> Choose the required types above to set when each one can be scanned.</div>
       </div>
     {% endif %}
 
@@ -85,7 +90,8 @@ and text areas) always span the full row.
       </div>
 
     {% else %}
-      <div class="{% if single_col or form.fields|length <= 4 or field.widget_type == 'clearablefileinput' or field.widget_type == 'textarea' %}col-12{% else %}col-12 col-md-6{% endif %}">
+      {% with slot=field.name|slot_of %}
+      <div class="{% if single_col or form.fields|length <= 4 or field.widget_type == 'clearablefileinput' or field.widget_type == 'textarea' %}col-12{% else %}col-12 col-md-6{% endif %}{% if slot %} slot-window{% endif %}"{% if slot %} data-slot="{{ slot }}"{% endif %}>
         <label class="form-label" for="{{ field.id_for_label }}">
           {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
         </label>
@@ -93,6 +99,7 @@ and text areas) always span the full row.
         {% if field.help_text and field.name != 'am_in_start' %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
         {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
       </div>
+      {% endwith %}
     {% endif %}
   {% endif %}
 {% endfor %}

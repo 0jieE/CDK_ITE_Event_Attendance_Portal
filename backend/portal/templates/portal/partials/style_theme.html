@@ -112,6 +112,10 @@ there is no stale-asset caching. Everything is driven by the CSS variables below
   .choice-card:hover { border-color: rgba(var(--brand-rgb), .6); }
   .choice-card:has(.form-check-input:checked) { border-color: var(--brand); background: rgba(var(--brand-rgb), .09); }
   .choice-card:has(.form-check-input:focus-visible) { box-shadow: 0 0 0 .22rem rgba(var(--brand-rgb), .25); }
+  /* scan-window fields: hidden until their required type is ticked (JS toggles .is-on) */
+  .slot-window, .scan-windows-head { display: none; }
+  .slot-window.is-on, .scan-windows-head.is-on { display: block; }
+  .scan-windows-hint.is-off { display: none; }
   .form-section { display: flex; align-items: center; gap: .6rem; margin-top: .4rem; font-weight: 700; font-size: .78rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
   .form-section::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 

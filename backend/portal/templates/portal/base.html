@@ -282,6 +282,37 @@
       sync();
     })();
 
+    // ---------------------------------------------------------------------
+    // Event form: show a scan window only for the required types that are
+    // ticked. Hidden windows are disabled so they are not submitted (the
+    // server treats a slot that isn't required as having no window).
+    // ---------------------------------------------------------------------
+    function syncScanWindows(scope) {
+      var root = scope && scope.querySelectorAll ? scope : document;
+      var forms = root.matches && root.matches('form') ? [root] : Array.prototype.slice.call(root.querySelectorAll('form'));
+      forms.forEach(function (form) {
+        var boxes = form.querySelectorAll('input[name="required_types"]');
+        if (!boxes.length) return;
+        var on = {};
+        boxes.forEach(function (b) { if (b.checked) on[b.value] = true; });
+        var any = false;
+        form.querySelectorAll('.slot-window').forEach(function (el) {
+          var show = !!on[el.getAttribute('data-slot')];
+          el.classList.toggle('is-on', show);
+          el.querySelectorAll('input, select, textarea').forEach(function (i) { i.disabled = !show; });
+          if (show) any = true;
+        });
+        var head = form.querySelector('.scan-windows-head');
+        var hint = form.querySelector('.scan-windows-hint');
+        if (head) head.classList.toggle('is-on', any);
+        if (hint) hint.classList.toggle('is-off', any);
+      });
+    }
+    document.addEventListener('change', function (e) {
+      if (e.target && e.target.name === 'required_types') syncScanWindows(e.target.form || document);
+    });
+    document.addEventListener('DOMContentLoaded', function () { syncScanWindows(document); });
+
     // Bootstrap modal instance for HTMX-loaded forms.
     const appModal = new bootstrap.Modal(document.getElementById('appModal'));
 
@@ -324,6 +355,7 @@
         appModal.show();
       }
       initDataTables(e.detail.target);
+      syncScanWindows(e.detail.target);
     });
 
     // HX-Trigger: closeModal
