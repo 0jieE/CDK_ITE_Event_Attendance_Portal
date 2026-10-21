@@ -367,8 +367,11 @@ class AttendanceLog(models.Model):
 class Fine(models.Model):
     """A per-student, per-event fine ledger entry.
 
-    This is a *ledger only* — there is no payment gateway.  ``mark_paid``
-    simply records that the student handed cash to the treasurer.
+    This is a *ledger only* — there is no payment gateway.  Payments are recorded
+    **per missed slot** (:class:`FineSlotPayment`) as the student hands cash to the
+    treasurer; ``amount_paid`` is their sum and the fine is ``PAID`` once every missed
+    slot is paid.  ``mark_paid`` pays all the remaining slots at once.  (Fines marked PAID
+    before slot payments existed have no slot rows and are treated as paid in full.)
     """
 
     class Status(models.TextChoices):
@@ -382,6 +385,10 @@ class Fine(models.Model):
         Event, on_delete=models.CASCADE, related_name="fines"
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    amount_paid = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Sum of the slot payments (or the full amount for a fine paid in full).",
+    )
     missed_slots = models.PositiveIntegerField(default=0)
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.UNPAID
@@ -408,17 +415,44 @@ class Fine(models.Model):
     def __str__(self):
         return f"Fine {self.student.student_number} / {self.event.name}: {self.amount} ({self.status})"
 
-    def mark_paid(self, recorded_by=None, when=None):
-        """Record that the fine was settled in cash with the treasurer."""
-        from django.utils import timezone
+    @property
+    def balance(self):
+        """What is still owed (never negative)."""
+        return max(self.amount - self.amount_paid, 0)
 
-        self.status = self.Status.PAID
-        self.paid_at = when or timezone.now()
-        if recorded_by is not None:
-            self.recorded_by = recorded_by
-        self.needs_review = False
-        self.save(update_fields=["status", "paid_at", "recorded_by", "needs_review", "updated_at"])
+    @property
+    def is_partially_paid(self):
+        return self.status != self.Status.PAID and self.amount_paid > 0
+
+    def mark_paid(self, recorded_by=None, when=None):
+        """Record that the rest of the fine was settled in cash with the treasurer."""
+        from . import services
+
+        services.pay_slots(self, recorded_by=recorded_by, when=when)
         return self
+
+
+class FineSlotPayment(models.Model):
+    """Cash received for ONE missed slot (a date + attendance type) of a fine."""
+
+    fine = models.ForeignKey(Fine, on_delete=models.CASCADE, related_name="slot_payments")
+    date = models.DateField()
+    attendance_type = models.CharField(max_length=10, choices=AttendanceType.choices)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    paid_at = models.DateTimeField(auto_now_add=True)
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="recorded_slot_payments",
+    )
+
+    class Meta:
+        ordering = ["date", "attendance_type"]
+        constraints = [
+            models.UniqueConstraint(fields=["fine", "date", "attendance_type"], name="uniq_fine_slot_payment"),
+        ]
+
+    def __str__(self):
+        return f"{self.fine_id} {self.date} {self.attendance_type}: {self.amount}"
 
 
 @receiver(post_delete, sender=QRCode)

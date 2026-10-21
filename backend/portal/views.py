@@ -6,6 +6,7 @@ duplicated here.
 """
 
 import csv
+import datetime
 import logging
 
 from django.conf import settings
@@ -251,12 +252,8 @@ SECTIONS = [
 # Attendance Logs (read-only, filterable)
 # ---------------------------------------------------------------------------
 def _distinct_sections():
-    """Sorted list of section labels currently in use (for filter dropdowns)."""
-    return sorted(
-        s for s in Student.objects.exclude(section="")
-        .values_list("section", flat=True)
-        .distinct()
-    )
+    """The sections to offer in filter dropdowns: always A to G (never free text)."""
+    return [v for v in Student.Section.values if v]
 
 
 def _logs_semester(request):
@@ -381,15 +378,20 @@ _SLOT_ORDER = [
 _STATUS_LABELS = dict(AttendanceLog.Status.choices)
 
 
-def _build_attendance_grid(student, event):
+def _build_attendance_grid(student, event, fine=None):
     """Daily attendance detail for one student in one event.
 
     Returns a list of rows ``{date, cells:[{slot_label, value, kind}]}`` where
     each cell is ``–`` when the slot isn't required, ``Pending`` while the slot
     hasn't closed yet, ``Absent`` when it closed with no scan, else Present.
+
+    With the student's ``fine`` an Absent cell also says whether that slot is already
+    ``paid`` (and can be ``undo``-ne) or can be paid now (``can_pay``).
     """
     required = set(event.required_types or [])
     rates = event.rate_map()
+    paid_slots = set(fine.slot_payments.values_list("date", "attendance_type")) if fine else set()
+    paid_in_full_legacy = bool(fine and fine.status == Fine.Status.PAID and not paid_slots)
     now = timezone.localtime()
     logs = {
         (log.date, log.attendance_type): log.status
@@ -406,7 +408,13 @@ def _build_attendance_grid(student, event):
                 status = logs.get((day, slot))
                 if status is None:
                     if services.slot_has_elapsed(event, day, slot, now):
-                        cells.append({"value": "Absent", "kind": "absent"})
+                        cell = {"value": "Absent", "kind": "absent", "date": day.isoformat(), "slot": slot,
+                                "rate": rates.get(day, event.fine_rate)}
+                        if fine is not None:
+                            cell["paid"] = paid_in_full_legacy or (day, slot) in paid_slots
+                            cell["undo"] = (day, slot) in paid_slots
+                            cell["can_pay"] = not cell["paid"]
+                        cells.append(cell)
                     else:  # window still open / not opened yet: not a miss
                         cells.append({"value": "Pending", "kind": "pending"})
                 else:
@@ -439,11 +447,11 @@ def fines_view(request):
         f_event = request.GET.get("event") or ""
         student = Student.objects.select_related("user").filter(pk=f_student).first() if f_student else None
         event = Event.objects.filter(pk=f_event).first() if f_event else None
-        grid = _build_attendance_grid(student, event) if student and event else None
         fine = (
             Fine.objects.filter(student=student, event=event).first()
             if student and event else None
         )
+        grid = _build_attendance_grid(student, event, fine) if student and event else None
         base.update({
             "filters": {"student": f_student, "event": f_event},
             "student_obj": student, "event_obj": event,
@@ -531,11 +539,62 @@ def fines_mark_paid_view(request, pk):
             close_modal=False,
         )
     fine.mark_paid(recorded_by=request.user)
+    if fine.status != Fine.Status.PAID:
+        return htmx_action_response(
+            toast="Nothing to pay on that fine yet.", level="warning",
+            refresh_event="refresh-fines", close_modal=False,
+        )
     return htmx_action_response(
         toast=f"Marked paid: {fine.student.student_number} / {fine.event.name}.",
         refresh_event="refresh-fines",
         close_modal=False,
     )
+
+
+def _slot_from_post(request):
+    """``(date, slot)`` from the POST body, or ``None`` when malformed."""
+    try:
+        day = datetime.date.fromisoformat(request.POST.get("date", ""))
+    except ValueError:
+        return None
+    slot = request.POST.get("slot", "")
+    return (day, slot) if slot in AttendanceType.values else None
+
+
+@admin_required
+def fines_pay_slot_view(request, pk):
+    """Record cash received for ONE missed slot of a fine (partial payment)."""
+    fine = get_object_or_404(Fine.objects.select_related("student__user", "event"), pk=pk)
+    if request.method != "POST":
+        return HttpResponse(status=405)
+    key = _slot_from_post(request)
+    if key is None:
+        return htmx_action_response(toast="Invalid slot.", level="error", close_modal=False)
+    try:
+        paid = services.pay_slots(fine, slots=[key], recorded_by=request.user)
+    except ValueError as exc:
+        return htmx_action_response(toast=str(exc), level="error", refresh_event="refresh-fines", close_modal=False)
+    if not paid:
+        return htmx_action_response(toast="That slot is already paid.", level="warning",
+                                    refresh_event="refresh-fines", close_modal=False)
+    done = " The fine is now fully paid." if fine.status == Fine.Status.PAID else ""
+    return htmx_action_response(
+        toast=f"Paid {key[0]:%b %d} {dict(AttendanceType.choices)[key[1]]} for {fine.student.student_number}.{done}",
+        refresh_event="refresh-fines", close_modal=False,
+    )
+
+
+@admin_required
+def fines_unpay_slot_view(request, pk):
+    """Undo one slot payment (a mis-click)."""
+    fine = get_object_or_404(Fine.objects.select_related("student__user", "event"), pk=pk)
+    if request.method != "POST":
+        return HttpResponse(status=405)
+    key = _slot_from_post(request)
+    if key is None or not services.unpay_slot(fine, *key):
+        return htmx_action_response(toast="No payment to undo for that slot.", level="warning",
+                                    refresh_event="refresh-fines", close_modal=False)
+    return htmx_action_response(toast="Payment undone.", refresh_event="refresh-fines", close_modal=False)
 
 
 # ---------------------------------------------------------------------------

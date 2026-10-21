@@ -578,7 +578,9 @@ class StudentBalanceView(StudentScopedMixin, APIView):
 
         payload = {
             "total_fines": total(fines),
-            "total_paid": total(fines.filter(status=Fine.Status.PAID)),
-            "outstanding": total(fines.filter(status=Fine.Status.UNPAID)),
+            # slot payments count as paid even while the fine is only part-paid
+            "total_paid": fines.aggregate(s=Sum("amount_paid"))["s"] or Decimal("0.00"),
+            "outstanding": total(fines.filter(status=Fine.Status.UNPAID))
+            - (fines.filter(status=Fine.Status.UNPAID).aggregate(s=Sum("amount_paid"))["s"] or Decimal("0.00")),
         }
         return Response(BalanceSerializer(payload).data)

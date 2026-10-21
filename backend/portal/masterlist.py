@@ -88,7 +88,7 @@ def template_xlsx_bytes():
         ["Last Name / First Name", "Required."],
         ["Middle Name", "Optional."],
         ["Year Level", "Optional: 1, 2, 3 or 4 (also accepts 1st / 1st Year ...)."],
-        ["Section", "Optional, e.g. A."],
+        ["Section", "Optional: A, B, C, D, E, F or G."],
         [],
         ["Example", "2024-0001 | Dela Cruz | Juan | Santos | 1st Year | A"],
         ["Delete nothing from the header row. Passwords are generated automatically."],
@@ -221,7 +221,12 @@ def validate_rows(rows):
             problems.append(f"Year Level '{row.get('year_level')}' is not 1-4")
             year = row.get("year_level", "")     # keep the raw value: confirm re-validates
         row["year_level"] = year
-        row["section"] = (row.get("section") or "")[:20]
+        raw_section = (row.get("section") or "").strip()
+        section = Student.normalize_section(raw_section)
+        if raw_section and not section:
+            problems.append(f"Section '{raw_section}' is not A-G")
+            section = raw_section[:20]               # keep the raw value: confirm re-validates
+        row["section"] = section
         key = number.lower()
         if problems:
             row["status"], row["message"] = "error", "; ".join(problems)

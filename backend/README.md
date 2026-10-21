@@ -158,7 +158,7 @@ endpoints require the `IsAdmin` role.**
 | `attendance-logs/` | **read-only** | `?event=&student=&date=&attendance_type=&status=&date_from=&date_to=` |
 | `fines/` | list/retrieve/update | `?event=&student=&status=&needs_review=` |
 | `fines/calculate/` | POST | body `{ "event_id": N }` → runs the fines calculator |
-| `fines/{id}/mark-paid/` | POST | records cash turned over to the treasurer |
+| `fines/{id}/mark-paid/` | POST | records cash turned over to the treasurer for all the remaining slots (`amount_paid` / `balance` are in the payload; `PATCH {"status"}` pays / un-pays too) |
 | `dashboard/` | GET | totals + per-event breakdown |
 | `reports/attendance/` | GET | `?semester=&event=&date_from=&date_to=`; `&format=csv` to download |
 | `reports/financial/` | GET | same filters; `&format=csv` to download |
@@ -299,10 +299,15 @@ Two toggle views plus the calculate/mark-paid workflow:
 * **By Student** — pick a student **and** an event to see that student's **daily
   attendance grid**: one row per event-day with AM-IN / AM-OUT / PM-IN / PM-OUT
   columns — `–` when the slot isn't required, **Absent** when no scan exists,
-  else **Present** — plus the computed fine and a Mark-Paid action.
+  else **Present** — plus the computed fine. Each **Absent** cell has a **Pay ₱x** button so the
+  treasurer can record cash **slot by slot** (a small ✕ undoes a mis-click); **Mark all paid** /
+  **Pay balance** settles whatever is left. The fine shows *Paid* / *Part-paid* / *Unpaid* and the
+  dashboard and financial report count the amount actually paid.
 
-> **Students** now carry a **year level** (1st–4th) and a **section**; both are
-> editable on the student form and drive the year/section filters above.
+> **Students** now carry a **year level** (1st–4th) and a **section** (a fixed list, **A to G** —
+> free text used to create duplicates such as `a`, ` A`, `Section A`; existing data was normalised
+> by migration `accounts/0007`). Both are editable on the student form, imported from the
+> masterlist (Section must be A–G) and drive the year/section filters above.
 
 #### Settings & branding (`/portal/settings/`)
 A singleton `PortalSettings` row (editable here or in Django admin) controls the
@@ -413,7 +418,10 @@ the synchronous fallback keeps things working.
 * **Fines are a ledger only** (no payment gateway). `compute_fines_for_event`
   counts missed required slots × `fine_rate`, is **idempotent**, and never
   overwrites an already-`PAID` fine — it flags it (`needs_review`) instead.
-  `mark-paid` simply records that cash reached the treasurer.
+  Payments are recorded **per missed slot** (`FineSlotPayment`); `amount_paid` is their sum and the
+  fine is `PAID` once every missed slot is paid. `mark-paid` pays all the remaining slots; a new miss
+  on a later day reopens a fully-paid fine (the payments are kept). Fines marked PAID before slot
+  payments existed stay protected (`needs_review`).
 * **Fines are per required attendance slot, and only for slots that are over.**
   `compute_fines_for_event(event, as_of=None, now=None)` fines
   `missed slots x fine_rate`, where a slot is one `(date, required type)` pair.

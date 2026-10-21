@@ -16,6 +16,8 @@ urlpatterns = [
     path("fines/", views.fines_view, name="fines-list"),
     path("fines/calculate/", views.fines_calculate_view, name="fines-calculate"),
     path("fines/<int:pk>/mark-paid/", views.fines_mark_paid_view, name="fines-mark-paid"),
+    path("fines/<int:pk>/pay-slot/", views.fines_pay_slot_view, name="fines-pay-slot"),
+    path("fines/<int:pk>/unpay-slot/", views.fines_unpay_slot_view, name="fines-unpay-slot"),
     # Reports
     path("reports/attendance/", views.report_attendance_view, name="reports-attendance"),
     path("reports/financial/", views.report_financial_view, name="reports-financial"),

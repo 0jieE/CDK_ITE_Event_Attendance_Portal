@@ -335,9 +335,6 @@ class StudentForm(LinkedUserForm):
     class Meta:
         model = Student
         fields = ["student_number", "year_level", "section"]
-        widgets = {
-            "section": forms.TextInput(attrs={"placeholder": "e.g. A"}),
-        }
 
 
 # ---------------------------------------------------------------------------

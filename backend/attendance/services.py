@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from accounts.models import Student
 
-from .models import AttendanceLog, Event, Fine
+from .models import AttendanceLog, AttendanceType, Event, Fine, FineSlotPayment
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,13 @@ def compute_fines_for_event(event, as_of=None, now=None):
         )
     )
     # One query for every existing fine (avoids a query per student).
-    existing = {f.student_id: f for f in Fine.objects.filter(event=event)}
+    existing = {
+        f.student_id: f
+        for f in Fine.objects.filter(event=event).annotate(
+            paid_rows=Count("slot_payments"),
+            paid_sum=Coalesce(Sum("slot_payments__amount"), Decimal("0.00"), output_field=_MONEY),
+        )
+    }
 
     students = list(Student.objects.all())
     results = {"created": 0, "updated": 0, "flagged_for_review": 0, "fines": []}
@@ -121,8 +127,9 @@ def compute_fines_for_event(event, as_of=None, now=None):
             results["fines"].append(fine.id)
             continue
 
-        if fine.status == Fine.Status.PAID:
-            # Never overwrite a paid fine; flag it if the numbers changed.
+        if fine.status == Fine.Status.PAID and not fine.paid_rows:
+            # Paid in full before slot payments existed: never overwrite it, flag it if the
+            # numbers changed.
             if fine.missed_slots != missed or fine.amount != amount:
                 if not fine.needs_review:
                     fine.needs_review = True
@@ -130,7 +137,9 @@ def compute_fines_for_event(event, as_of=None, now=None):
                     results["flagged_for_review"] += 1
             continue
 
-        # Unpaid fine: safe to refresh in place.
+        # Unpaid / part-paid fine: safe to refresh in place. Slot payments are kept; the status
+        # follows them (PAID once every missed slot is paid, back to UNPAID when a newly
+        # missed slot adds to the amount).
         changed_fields = []
         if fine.missed_slots != missed:
             fine.missed_slots = missed
@@ -138,6 +147,18 @@ def compute_fines_for_event(event, as_of=None, now=None):
         if fine.amount != amount:
             fine.amount = amount
             changed_fields.append("amount")
+        if fine.paid_rows:
+            paid = fine.paid_sum.quantize(Decimal("0.01"))
+            status = Fine.Status.PAID if amount > 0 and paid >= amount else Fine.Status.UNPAID
+            for field, value in (
+                ("amount_paid", paid),
+                ("status", status),
+                ("needs_review", paid > amount),
+                ("paid_at", fine.paid_at if status == Fine.Status.PAID else None),
+            ):
+                if getattr(fine, field) != value:
+                    setattr(fine, field, value)
+                    changed_fields.append(field)
         if changed_fields:
             changed_fields.append("updated_at")
             fine.save(update_fields=changed_fields)
@@ -150,6 +171,98 @@ def compute_fines_for_event(event, as_of=None, now=None):
     results["students_evaluated"] = len(students)
     results["slots_per_student"] = len(elapsed_slots)
     return results
+
+
+_SLOT_ORDER = [t.value for t in AttendanceType]
+
+
+def missed_slot_details(student, event, now=None):
+    """The slots this student has missed so far: ``[(date, slot, rate)]`` in date/slot order.
+
+    Same rule as :func:`compute_fines_for_event` (a required slot that has elapsed with no
+    credited scan), with the rate of that slot's day.
+    """
+    now = now or timezone.localtime()
+    rates = event.rate_map()
+    default_rate = event.fine_rate if isinstance(event.fine_rate, Decimal) else Decimal(str(event.fine_rate))
+    credited = set(
+        AttendanceLog.objects.filter(event=event, student=student, status__in=CREDITED)
+        .values_list("date", "attendance_type")
+    )
+    required = [t for t in _SLOT_ORDER if t in (event.required_types or [])]
+    out = []
+    for day in event.iter_dates():
+        if day > now.date():
+            break
+        for slot in required:
+            if slot_has_elapsed(event, day, slot, now) and (day, slot) not in credited:
+                out.append((day, slot, rates.get(day, default_rate)))
+    return out
+
+
+def sync_fine_payment(fine, recorded_by=None, when=None):
+    """Recompute ``amount_paid`` / ``status`` / ``paid_at`` from the fine's slot payments."""
+    paid = FineSlotPayment.objects.filter(fine=fine).aggregate(
+        total=Coalesce(Sum("amount", output_field=_MONEY), _ZERO, output_field=_MONEY)
+    )["total"]
+    fine.amount_paid = paid
+    complete = fine.amount > 0 and paid >= fine.amount
+    if complete:
+        if fine.status != Fine.Status.PAID or fine.paid_at is None:
+            fine.paid_at = when or timezone.now()
+        fine.status = Fine.Status.PAID
+        if recorded_by is not None:
+            fine.recorded_by = recorded_by
+    else:
+        fine.status = Fine.Status.UNPAID
+        fine.paid_at = None
+    fine.needs_review = paid > fine.amount
+    fine.save(update_fields=["amount_paid", "status", "paid_at", "recorded_by", "needs_review", "updated_at"])
+    return fine
+
+
+@transaction.atomic
+def pay_slots(fine, slots=None, recorded_by=None, when=None, now=None):
+    """Record cash received for missed slots of ``fine``.
+
+    ``slots`` is an iterable of ``(date, slot)`` pairs, or ``None`` for every slot that is
+    still unpaid. Only slots that are currently *missed* can be paid; ``ValueError`` is
+    raised otherwise. The fine's amount / missed count are refreshed first so the ledger is
+    never a few minutes behind the attendance. Returns the number of slots paid.
+    """
+    if fine.status == Fine.Status.PAID and not fine.slot_payments.exists():
+        return 0                                    # paid in full before slot payments existed
+    details = missed_slot_details(fine.student, fine.event, now)
+    fine.missed_slots = len(details)
+    fine.amount = sum((rate for _, _, rate in details), Decimal("0")).quantize(Decimal("0.01"))
+    already = set(fine.slot_payments.values_list("date", "attendance_type"))
+    if slots is None:
+        wanted = [(d, t, r) for d, t, r in details if (d, t) not in already]
+    else:
+        by_key = {(d, t): r for d, t, r in details}
+        wanted = []
+        for key in slots:
+            key = (key[0], key[1])
+            if key not in by_key:
+                raise ValueError("That slot is not a missed slot of this fine.")
+            if key not in already:
+                wanted.append((key[0], key[1], by_key[key]))
+    FineSlotPayment.objects.bulk_create(
+        FineSlotPayment(fine=fine, date=d, attendance_type=t, amount=r, recorded_by=recorded_by)
+        for d, t, r in wanted
+    )
+    fine.save(update_fields=["missed_slots", "amount", "updated_at"])
+    sync_fine_payment(fine, recorded_by=recorded_by, when=when)
+    return len(wanted)
+
+
+@transaction.atomic
+def unpay_slot(fine, day, slot):
+    """Undo one slot payment (e.g. a mis-click). Returns True when a payment was removed."""
+    removed, _ = FineSlotPayment.objects.filter(fine=fine, date=day, attendance_type=slot).delete()
+    if removed:
+        sync_fine_payment(fine)
+    return bool(removed)
 
 
 def refresh_active_fines(min_interval=REFRESH_MIN_INTERVAL):
@@ -191,6 +304,12 @@ def _money_sum(queryset, field, **filters):
     )["total"]
 
 
+def _outstanding(fines):
+    """What is still owed on the unpaid / part-paid fines (a PAID fine owes nothing)."""
+    unpaid = fines.filter(status=Fine.Status.UNPAID)
+    return _money_sum(unpaid, "amount") - _money_sum(unpaid, "amount_paid")
+
+
 def _attendance_rate(log_qs):
     """Return the credited / total ratio (0–1) over an AttendanceLog queryset."""
     agg = log_qs.aggregate(
@@ -208,8 +327,8 @@ def build_dashboard():
     refresh_active_fines()
     fines = Fine.objects.all()
     total_issued = _money_sum(fines, "amount")
-    total_collected = _money_sum(fines, "amount", status=Fine.Status.PAID)
-    total_outstanding = _money_sum(fines, "amount", status=Fine.Status.UNPAID)
+    total_collected = _money_sum(fines, "amount_paid")
+    total_outstanding = _outstanding(fines)
 
     overall_rate = _attendance_rate(AttendanceLog.objects.all())
 
@@ -225,10 +344,8 @@ def build_dashboard():
                     AttendanceLog.objects.filter(event=event)
                 ),
                 "fines_issued": _money_sum(ev_fines, "amount"),
-                "collected": _money_sum(ev_fines, "amount", status=Fine.Status.PAID),
-                "outstanding": _money_sum(
-                    ev_fines, "amount", status=Fine.Status.UNPAID
-                ),
+                "collected": _money_sum(ev_fines, "amount_paid"),
+                "outstanding": _outstanding(ev_fines),
             }
         )
 
@@ -302,8 +419,8 @@ def financial_report(*, semester=None, event=None, date_from=None, date_to=None)
                 "semester": str(ev.semester),
                 "fines_count": fines.count(),
                 "total_issued": _money_sum(fines, "amount"),
-                "collected": _money_sum(fines, "amount", status=Fine.Status.PAID),
-                "outstanding": _money_sum(fines, "amount", status=Fine.Status.UNPAID),
+                "collected": _money_sum(fines, "amount_paid"),
+                "outstanding": _outstanding(fines),
                 "unpaid_count": fines.filter(status=Fine.Status.UNPAID).count(),
                 "paid_count": fines.filter(status=Fine.Status.PAID).count(),
             }

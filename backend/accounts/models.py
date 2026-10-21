@@ -1,5 +1,7 @@
 """User, Instructor and Student models — the RBAC backbone of the system."""
 
+import re
+
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
 from django.db import models
@@ -159,6 +161,18 @@ class Student(models.Model):
         THIRD = "3", "3rd Year"
         FOURTH = "4", "4th Year"
 
+    class Section(models.TextChoices):
+        """The only sections that exist: A to G (a free-text section produced duplicates)."""
+
+        __empty__ = "—"
+        A = "A", "A"
+        B = "B", "B"
+        C = "C", "C"
+        D = "D", "D"
+        E = "E", "E"
+        F = "F", "F"
+        G = "G", "G"
+
     user = models.OneToOneField(
         User,
         on_delete=models.CASCADE,
@@ -168,13 +182,23 @@ class Student(models.Model):
     year_level = models.CharField(
         max_length=2, choices=YearLevel.choices, blank=True
     )
-    section = models.CharField(max_length=20, blank=True)
+    section = models.CharField(max_length=20, choices=Section.choices, blank=True)
 
     class Meta:
         ordering = ["year_level", "section", "student_number"]
 
     def __str__(self):
         return f"{self.student_number} — {self.user.get_full_name() or self.user.username}"
+
+    @staticmethod
+    def normalize_section(value):
+        """``" b "`` / ``"Section C"`` / ``"1-D"`` -> ``"B"`` / ``"C"`` / ``"D"``; ``""`` if it
+        cannot be read as a section A-G."""
+        v = re.sub(r"\s+", " ", str(value or "")).strip().upper()
+        if v and v in Student.Section.values:
+            return v
+        m = re.search(r"(?:^|[ \-_.])\d?([A-G])$", v) or re.fullmatch(r"\d([A-G])", v)
+        return m.group(1) if m else ""
 
     @property
     def year_section(self):

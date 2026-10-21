@@ -14,11 +14,13 @@
           <td>{{ f.student.year_section|default:"—" }}</td>
           <td>{{ f.event.name }}</td>
           <td>{{ f.missed_slots }}</td>
-          <td>₱{{ f.amount }}</td>
+          <td>₱{{ f.amount }}{% if f.amount_paid and f.status != 'PAID' %}<div class="small text-muted">₱{{ f.amount_paid }} paid · ₱{{ f.balance }} left</div>{% endif %}</td>
           <td>
             {% if f.status == 'PAID' %}
               <span class="badge text-bg-success">Paid</span>
               {% if f.paid_at %}<div class="small text-muted">{{ f.paid_at|date:"M d, Y" }}</div>{% endif %}
+            {% elif f.amount_paid %}
+              <span class="badge text-bg-warning">Part-paid</span>
             {% else %}
               <span class="badge text-bg-danger">Unpaid</span>
             {% endif %}
@@ -29,9 +31,9 @@
             {% if f.status != 'PAID' %}
               <button class="btn btn-sm btn-success"
                       hx-post="{% url 'portal:fines-mark-paid' f.id %}"
-                      hx-confirm="Mark this fine as PAID (cash turned over to the treasurer)?"
+                      hx-confirm="Mark the {% if f.amount_paid %}remaining ₱{{ f.balance }}{% else %}whole fine{% endif %} as PAID (cash turned over to the treasurer)? To pay single slots, use Fines &gt; By Student."
                       hx-swap="none">
-                <i class="bi bi-cash-coin"></i> Mark Paid
+                <i class="bi bi-cash-coin"></i> {% if f.amount_paid %}Pay balance{% else %}Mark Paid{% endif %}
               </button>
             {% else %}
               <span class="text-muted small">—</span>

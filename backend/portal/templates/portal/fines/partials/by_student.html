@@ -21,16 +21,18 @@ Cell shows '–' when the slot isn't required, 'Pending' while open, 'Absent' wh
     </div>
     <div class="text-md-end">
       {% if fine %}
-        <div>Missed slots: <strong>{{ fine.missed_slots }}</strong> · Fine: <strong>₱{{ fine.amount }}</strong></div>
+        <div>Missed slots: <strong>{{ fine.missed_slots }}</strong> · Fine: <strong>₱{{ fine.amount }}</strong>
+          {% if fine.amount_paid %}· Paid: <strong class="text-success">₱{{ fine.amount_paid }}</strong>{% endif %}
+          {% if fine.status != 'PAID' and fine.amount_paid %}· Balance: <strong class="text-danger">₱{{ fine.balance }}</strong>{% endif %}</div>
         <div>
           {% if fine.status == 'PAID' %}<span class="badge text-bg-success">Paid</span>
           {% else %}
-            <span class="badge text-bg-danger">Unpaid</span>
+            {% if fine.amount_paid %}<span class="badge text-bg-warning">Part-paid</span>{% else %}<span class="badge text-bg-danger">Unpaid</span>{% endif %}
             <button class="btn btn-sm btn-success ms-1 no-print"
                     hx-post="{% url 'portal:fines-mark-paid' fine.id %}"
-                    hx-confirm="Mark this fine as PAID (cash turned over to the treasurer)?"
+                    hx-confirm="Mark the {% if fine.amount_paid %}remaining ₱{{ fine.balance }}{% else %}whole fine{% endif %} as PAID (cash turned over to the treasurer)?"
                     hx-swap="none">
-              <i class="bi bi-cash-coin"></i> Mark Paid
+              <i class="bi bi-cash-coin"></i> {% if fine.amount_paid %}Pay balance{% else %}Mark all paid{% endif %}
             </button>
           {% endif %}
         </div>
@@ -57,6 +59,26 @@ Cell shows '–' when the slot isn't required, 'Pending' while open, 'Absent' wh
                 {% if cell.kind == 'na' %}<span class="text-muted">{{ cell.value }}</span>
                 {% elif cell.kind == 'present' %}<span class="badge text-bg-success">{{ cell.value }}</span>
                 {% elif cell.kind == 'pending' %}<span class="badge text-bg-secondary">{{ cell.value }}</span>
+                {% elif cell.kind == 'absent' and cell.paid %}
+                  <span class="badge text-bg-success" title="₱{{ cell.rate }} paid">Paid</span>
+                  {% if cell.undo %}
+                    <button class="btn btn-sm btn-link text-danger p-0 ms-1 no-print" title="Undo this payment"
+                            hx-post="{% url 'portal:fines-unpay-slot' fine.id %}"
+                            hx-vals='{"date": "{{ cell.date }}", "slot": "{{ cell.slot }}"}'
+                            hx-confirm="Undo the payment for this slot?" hx-swap="none">
+                      <i class="bi bi-x-circle"></i>
+                    </button>
+                  {% endif %}
+                {% elif cell.kind == 'absent' %}
+                  <span class="badge text-bg-danger">{{ cell.value }}</span>
+                  {% if cell.can_pay %}
+                    <button class="btn btn-sm btn-outline-success py-0 px-1 ms-1 no-print" title="Mark this slot as paid"
+                            hx-post="{% url 'portal:fines-pay-slot' fine.id %}"
+                            hx-vals='{"date": "{{ cell.date }}", "slot": "{{ cell.slot }}"}'
+                            hx-confirm="Mark this slot (₱{{ cell.rate }}) as paid?" hx-swap="none">
+                      Pay ₱{{ cell.rate }}
+                    </button>
+                  {% endif %}
                 {% else %}<span class="badge text-bg-danger">{{ cell.value }}</span>{% endif %}
               </td>
             {% endfor %}
@@ -67,7 +89,8 @@ Cell shows '–' when the slot isn't required, 'Pending' while open, 'Absent' wh
   </div>
   <p class="text-muted small mt-2 mb-0">
     <span class="badge text-bg-success">Present</span>
-    <span class="badge text-bg-danger">Absent</span> = missed required slot ·
+    <span class="badge text-bg-danger">Absent</span> = missed required slot (use <em>Pay</em> to record cash for that slot, or <em>Mark all paid</em>) ·
+    <span class="badge text-bg-success">Paid</span> = missed slot already paid ·
     <span class="badge text-bg-secondary">Pending</span> = slot not closed yet ·
     <span class="text-muted">–</span> = not required
   </p>

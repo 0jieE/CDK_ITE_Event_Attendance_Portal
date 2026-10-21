@@ -103,7 +103,7 @@ Table accounts_student [headercolor: #41b422] {
   user_id        bigint      [not null, unique, note: '1:1 with accounts_user']
   student_number varchar(50) [not null, unique, note: 'Also the username']
   year_level     year_level  [not null, default: '', note: 'Blank until set']
-  section        varchar(20) [not null, default: '']
+  section        varchar(20) [not null, default: '', note: 'A-G only (blank = not set)']
 
   Note: 'Student profile. Created by the adviser (one by one or masterlist import).'
 }
@@ -195,6 +195,7 @@ Table attendance_fine [headercolor: #f5b301] {
   student_id     bigint        [not null]
   event_id       bigint        [not null]
   amount         decimal(10,2) [not null, default: 0, note: 'sum of the day rate of every missed slot']
+  amount_paid    decimal(10,2) [not null, default: 0, note: 'sum of attendance_fineslotpayment (or the full amount for a fine paid in full before slot payments)']
   missed_slots   int           [not null, default: 0]
   status         fine_status   [not null, default: 'UNPAID']
   paid_at        timestamptz   [null]
@@ -208,6 +209,22 @@ Table attendance_fine [headercolor: #f5b301] {
   }
 
   Note: 'Ledger only. Computed by the fines calculator from required slots that have elapsed and have no PRESENT scan.'
+}
+
+Table attendance_fineslotpayment [headercolor: #f5b301] {
+  id             bigint          [pk, increment]
+  fine_id        bigint          [not null]
+  date           date            [not null]
+  attendance_type attendance_type [not null]
+  amount         decimal(10,2)   [not null, note: 'The slot day rate when it was paid']
+  paid_at        timestamptz     [not null]
+  recorded_by_id bigint          [null]
+
+  indexes {
+    (fine_id, date, attendance_type) [unique]
+  }
+
+  Note: 'Cash received for ONE missed slot. The fine is PAID once every missed slot is paid.'
 }
 
 // -------------------------------------------------------------- portal ---
@@ -262,6 +279,8 @@ Ref: attendance_attendancelog.scanned_by_id > accounts_instructor.id [delete: se
 Ref: attendance_fine.student_id     > accounts_student.id [delete: cascade]
 Ref: attendance_fine.event_id       > attendance_event.id [delete: cascade]
 Ref: attendance_fine.recorded_by_id > accounts_user.id    [delete: set null]
+Ref: attendance_fineslotpayment.fine_id        > attendance_fine.id [delete: cascade]
+Ref: attendance_fineslotpayment.recorded_by_id > accounts_user.id   [delete: set null]
 
 Ref: token_blacklist_outstandingtoken.user_id    > accounts_user.id [delete: set null]
 Ref: token_blacklist_blacklistedtoken.token_id   - token_blacklist_outstandingtoken.id [delete: cascade]

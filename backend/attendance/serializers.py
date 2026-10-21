@@ -195,6 +195,7 @@ class FineSerializer(serializers.ModelSerializer):
     recorded_by_name = serializers.CharField(
         source="recorded_by.get_full_name", read_only=True, default=None
     )
+    balance = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = Fine
@@ -204,6 +205,8 @@ class FineSerializer(serializers.ModelSerializer):
             "event",
             "event_name",
             "amount",
+            "amount_paid",
+            "balance",
             "missed_slots",
             "status",
             "paid_at",
@@ -219,6 +222,8 @@ class FineSerializer(serializers.ModelSerializer):
             "event",
             "event_name",
             "amount",
+            "amount_paid",
+            "balance",
             "missed_slots",
             "paid_at",
             "recorded_by",
@@ -227,6 +232,19 @@ class FineSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def update(self, instance, validated_data):
+        """Setting ``status`` through the API pays / un-pays the slots behind it."""
+        from . import services
+
+        new_status = validated_data.pop("status", None)
+        if new_status == Fine.Status.PAID and instance.status != Fine.Status.PAID:
+            services.pay_slots(instance, recorded_by=self.context["request"].user)
+        elif new_status == Fine.Status.UNPAID and (instance.status == Fine.Status.PAID or instance.amount_paid):
+            instance.slot_payments.all().delete()
+            instance.status, instance.amount_paid, instance.paid_at = Fine.Status.UNPAID, 0, None
+            instance.save(update_fields=["status", "amount_paid", "paid_at", "updated_at"])
+        return instance
 
 
 # ---------------------------------------------------------------------------

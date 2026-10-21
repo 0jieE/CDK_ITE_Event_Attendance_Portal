@@ -160,6 +160,7 @@ class StudentAttendanceSerializer(serializers.ModelSerializer):
 
 class StudentFineSerializer(serializers.ModelSerializer):
     event_name = serializers.CharField(source="event.name", read_only=True)
+    balance = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = Fine
@@ -169,6 +170,8 @@ class StudentFineSerializer(serializers.ModelSerializer):
             "event_name",
             "missed_slots",
             "amount",
+            "amount_paid",
+            "balance",
             "status",
             "paid_at",
         ]
