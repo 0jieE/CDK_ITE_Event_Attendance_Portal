@@ -14,6 +14,7 @@ from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.text import slugify
 
 from accounts.models import Instructor, Student
 from attendance import services
@@ -174,6 +175,20 @@ def terms_view(request):
     return render(request, "portal/terms/list.html", context)
 
 
+@admin_required
+def semester_activate_view(request, pk):
+    """Make one semester the active one (always allowed - this is routine, not an edit)."""
+    if request.method != "POST":
+        return redirect("portal:terms-list")
+    semester = get_object_or_404(Semester, pk=pk)
+    semester.is_active = True
+    semester.save()
+    return htmx_action_response(
+        toast=f"{semester} is now the active semester.",
+        refresh_event="refresh-semesters", close_modal=False,
+    )
+
+
 class _LockedWhenUsedSection(CrudSection):
     """Edit/delete are refused for non-Super-Admins once events exist (see terms_view)."""
 
@@ -244,77 +259,112 @@ def _distinct_sections():
     )
 
 
+def _logs_semester(request):
+    """The semester the logs are filtered by.
+
+    No ``semester`` parameter -> the active semester (the default); ``semester=`` (empty)
+    -> all semesters; otherwise that semester.
+    """
+    raw = request.GET.get("semester")
+    if raw is None:
+        return Semester.current()
+    if raw.isdigit():
+        return Semester.objects.select_related("school_year").filter(pk=raw).first()
+    return None
+
+
 @admin_required
 def attendance_logs_view(request):
-    """Read-only, filterable list of attendance logs."""
-    qs = AttendanceLog.objects.select_related(
-        "student__user", "event", "scanned_by__user"
-    )
+    """Read-only attendance logs on two tabs: *By Event* and *By Student*.
 
+    Only scans are stored (a log row means PRESENT); absences are never recorded as rows,
+    so there is no status to show or filter. The semester filter (default: the active
+    semester) applies to both tabs.
+    """
+    tab = "student" if request.GET.get("tab") == "student" else "event"
+    semester = _logs_semester(request)
     f_event = request.GET.get("event") or ""
     f_student = request.GET.get("student") or ""
     f_type = request.GET.get("attendance_type") or ""
-    f_status = request.GET.get("status") or ""
-    f_from = request.GET.get("date_from") or ""
-    f_to = request.GET.get("date_to") or ""
-    f_year = request.GET.get("year_level") or ""
     f_section = request.GET.get("section") or ""
 
-    if f_event:
-        qs = qs.filter(event_id=f_event)
-    if f_student:
-        qs = qs.filter(student_id=f_student)
+    events = Event.objects.select_related("semester__school_year").order_by("-start_date", "name")
+    if semester:
+        events = events.filter(semester=semester)
+
+    qs = AttendanceLog.objects.select_related("student__user", "event", "scanned_by__user")
+    if semester:
+        qs = qs.filter(event__semester=semester)
     if f_type:
         qs = qs.filter(attendance_type=f_type)
-    if f_status:
-        qs = qs.filter(status=f_status)
-    if f_from:
-        qs = qs.filter(date__gte=f_from)
-    if f_to:
-        qs = qs.filter(date__lte=f_to)
-    if f_year:
-        qs = qs.filter(student__year_level=f_year)
-    if f_section:
-        qs = qs.filter(student__section=f_section)
+
+    event_obj = student_obj = None
+    if tab == "event":
+        # One event at a time: the chosen one, else the most recent event of the semester.
+        event_obj = events.filter(pk=f_event).first() if f_event.isdigit() else None
+        # default: the most recent event that has already started, else the first one listed
+        event_obj = event_obj or events.filter(start_date__lte=timezone.localdate()).first() or events.first()
+        qs = qs.filter(event=event_obj) if event_obj else qs.none()
+        if f_section:
+            qs = qs.filter(student__section=f_section)
+        qs = qs.order_by("student__user__last_name", "student__user__first_name", "date", "scanned_at")
+    else:
+        student_obj = (
+            Student.objects.select_related("user").filter(pk=f_student).first()
+            if f_student.isdigit() else None
+        )
+        qs = qs.filter(student=student_obj) if student_obj else qs.none()
+        event_filter = events.filter(pk=f_event).first() if f_event.isdigit() else None
+        if event_filter:
+            qs = qs.filter(event=event_filter)
+        else:
+            f_event = ""
+        qs = qs.order_by("-date", "event__name", "scanned_at")
+
+    def _row(log):
+        row = {}
+        if tab == "event":
+            row.update({"Student No.": log.student.student_number,
+                        "Student": log.student.user.get_full_name() or log.student.user.username,
+                        "Year & Section": log.student.year_section})
+        else:
+            row["Event"] = log.event.name
+        row.update({
+            "Date": log.date.isoformat(),
+            "Type": log.get_attendance_type_display(),
+            "Scanned At": timezone.localtime(log.scanned_at).strftime("%Y-%m-%d %H:%M") if log.scanned_at else "",
+            "Scanned By": log.scanned_by.user.get_full_name() if log.scanned_by else "",
+        })
+        return row
 
     if request.GET.get("format") == "csv":
-        rows = [
-            {
-                "Student No.": log.student.student_number,
-                "Student": log.student.user.get_full_name() or log.student.user.username,
-                "Year": log.student.get_year_level_display(),
-                "Section": log.student.section,
-                "Event": log.event.name,
-                "Date": log.date.isoformat(),
-                "Type": log.get_attendance_type_display(),
-                "Status": log.get_status_display(),
-                "Scanned At": timezone.localtime(log.scanned_at).strftime("%Y-%m-%d %H:%M") if log.scanned_at else "",
-                "Scanned By": log.scanned_by.user.get_full_name() if log.scanned_by else "",
-            }
-            for log in qs.order_by("-date", "event__name", "student__user__last_name")
-        ]
+        rows = [_row(log) for log in qs]
         if not rows:
-            rows = [{"Student No.": "", "Student": "", "Year": "", "Section": "", "Event": "", "Date": "",
-                     "Type": "", "Status": "", "Scanned At": "", "Scanned By": ""}]
-        return _csv_response(rows, "attendance_logs.csv")
+            rows = [{key: "" for key in (
+                ["Student No.", "Student", "Year & Section"] if tab == "event" else ["Event"]
+            ) + ["Date", "Type", "Scanned At", "Scanned By"]}]
+        name = event_obj.name if event_obj else (student_obj.student_number if student_obj else "logs")
+        return _csv_response(rows, f"attendance_logs_{tab}_{slugify(name)}.csv")
 
     context = {
         "active": "attendance_logs",
+        "tab": tab,
         "objects": qs,
-        "events": Event.objects.all(),
-        "students": Student.objects.select_related("user").all(),
+        "semester": semester,
+        "semesters": Semester.objects.select_related("school_year").order_by("-school_year__sy", "name"),
+        "events": events,
+        "event_obj": event_obj,
+        "student_obj": student_obj,
+        "students": Student.objects.select_related("user").order_by("user__last_name", "user__first_name"),
         "attendance_types": AttendanceType.choices,
-        "statuses": AttendanceLog.Status.choices,
-        "year_levels": Student.YearLevel.choices,
         "sections": _distinct_sections(),
         "filters": {
-            "event": f_event, "student": f_student, "attendance_type": f_type,
-            "status": f_status, "date_from": f_from, "date_to": f_to,
-            "year_level": f_year, "section": f_section,
+            "semester": str(semester.pk) if semester else "",
+            "event": str(event_obj.pk) if event_obj else f_event,
+            "student": str(student_obj.pk) if student_obj else "",
+            "attendance_type": f_type, "section": f_section,
         },
     }
-    if is_htmx(request) and request.GET.get("partial") == "table":
-        return render(request, "portal/attendance_logs/partials/table.html", context)
     return render(request, "portal/attendance_logs/list.html", context)
 
 

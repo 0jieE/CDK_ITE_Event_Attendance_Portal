@@ -68,18 +68,19 @@ class LateStatusRemovedTests(TestCase):
         self.assertFalse(AttendanceLog.objects.filter(status="LATE").exists())
         self.assertEqual(AttendanceLog.objects.filter(status="PRESENT").count(), 2)
 
-    def test_the_api_no_longer_accepts_late_as_a_filter(self):
-        ok = self.api.get(reverse("attendancelog-list"), {"status": "PRESENT"})
-        self.assertEqual(ok.status_code, 200)
-        self.assertEqual(self.api.get(reverse("attendancelog-list"), {"status": "LATE"}).status_code, 400)
+    def test_status_is_no_longer_a_filter_of_the_logs_api(self):
+        # Only scans are stored, so a status filter would be meaningless; it is ignored.
+        res = self.api.get(reverse("attendancelog-list"), {"status": "LATE"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["count"], 2)
 
     # --- the attendance report ------------------------------------------------------
     def test_report_rows_have_no_late_or_rate(self):
         rows = services.attendance_report()
         self.assertEqual(len(rows), 1)
         self.assertEqual(set(rows[0]), {"event_id", "event_name", "semester", "start_date", "end_date",
-                                        "total_logs", "present", "absent"})
-        self.assertEqual((rows[0]["total_logs"], rows[0]["present"], rows[0]["absent"]), (2, 1, 1))
+                                        "present"})
+        self.assertEqual(rows[0]["present"], 1)          # absences are not stored, so no "absent" count
 
     def test_report_json_and_csv_have_no_late_or_rate(self):
         data = self.api.get(reverse("report-attendance")).json()
@@ -89,14 +90,14 @@ class LateStatusRemovedTests(TestCase):
         res = self.api.get(reverse("report-attendance"), {"format": "csv"})
         header = next(csv.reader(io.StringIO(res.content.decode())))
         self.assertEqual(header, ["event_id", "event_name", "semester", "start_date", "end_date",
-                                  "total_logs", "present", "absent"])
+                                  "present"])
 
     def test_portal_report_table_columns(self):
         html = self.client.get(reverse("portal:reports-attendance")).content.decode()
         head = html[html.index("<thead>"): html.index("</thead>")]
         import re
         cols = [re.sub(r"<[^>]+>", "", c).strip() for c in re.findall(r"<th[^>]*>.*?</th>", head, re.S)]
-        self.assertEqual(cols, ["Event", "Semester", "Start", "End", "Total", "Present", "Absent"])
+        self.assertEqual(cols, ["Event", "Semester", "Start", "End", "Present (scans)"])
         self.assertNotIn("Late", cols)
         self.assertNotIn("Rate", cols)
         self.assertIn("Report Event", html)
@@ -104,7 +105,7 @@ class LateStatusRemovedTests(TestCase):
     def test_portal_report_empty_state_spans_the_remaining_columns(self):
         Event.objects.all().delete()
         html = self.client.get(reverse("portal:reports-attendance")).content.decode()
-        self.assertIn('colspan="7"', html)
+        self.assertIn('colspan="5"', html)
 
     def test_dashboard_attendance_rate_is_kept(self):
         html = self.client.get(reverse("portal:dashboard")).content.decode()
@@ -112,9 +113,9 @@ class LateStatusRemovedTests(TestCase):
 
     # --- other pages -------------------------------------------------------------------
     def test_no_late_option_or_badge_on_any_portal_page(self):
-        logs = self.client.get(reverse("portal:attendance_logs-list")).content.decode()
+        logs = self.client.get(reverse("portal:attendance_logs-list"), {"semester": ""}).content.decode()
         self.assertNotIn(">Late<", logs)
-        self.assertIn(">Present<", logs)
+        self.assertNotIn(">Absent<", logs)           # no Status column: only scans are stored
         grid = self.client.get(reverse("portal:fines-list"), {"view": "student", "student": self.s1.pk,
                                                                "event": self.event.pk}).content.decode()
         self.assertNotIn(">Late<", grid)

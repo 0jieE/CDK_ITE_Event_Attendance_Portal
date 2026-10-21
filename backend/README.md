@@ -278,13 +278,13 @@ The adviser can use **only the portal**; Django Administration is for the Super 
 | Students | `/portal/students/` | linked `User` + `student_number` + **year level & section**; **Import masterlist** (CSV/Excel) + printable credentials |
 | Events | `/portal/events/` | dates + `required_types` multi-select; validates `end ≥ start`; **fine per day** for multi-day events |
 | **Reports** (sidebar group) | — | Attendance Report, Attendance Logs, Financial Report, Fines |
-| ↳ Attendance Logs | `/portal/attendance_logs/` | **read-only**, filterable (event / student / **year** / **section** / date / type / status) + **Download CSV** + **Print** |
+| ↳ Attendance Logs | `/portal/attendance_logs/` | **read-only**, two tabs: **By Event** (event, section, type) and **By Student** (student, event, type); the **semester** filter (default: the **active** semester) applies to both. No status column/filter: only scans are stored (a log = present), absences are never recorded as rows. **Download CSV** + **Print** (printed page = ITE logo + event or student name header + the table only) |
 | ↳ Attendance Report | `/portal/reports/attendance/` | filters + **Download CSV** + **Print** |
 | ↳ Financial Report | `/portal/reports/financial/` | filters + **Download CSV** + **Print** |
 | ↳ Fines | `/portal/fines/` | lives under Reports; see below |
 | **Settings** (sidebar group) | — | Appearance, School Years & Semesters |
 | ↳ Appearance | `/portal/settings/` | UI theme, light/dark mode, branding & logo |
-| ↳ School Years & Semesters | `/portal/terms/` | **one table** (School Year \| Semester \| Events \| Actions, a row per semester) with **Add School Year** and **Add Semester** buttons. Once events exist under a school year or semester, Edit/Delete are hidden (and refused by the server and API) for the adviser - only the Super Admin can change it |
+| ↳ School Years & Semesters | `/portal/terms/` | **one table** (School Year \| Semester \| Events \| Actions, a row per semester) with **Add School Year** and **Add Semester** buttons. A semester can be marked **Active** (badge + **Set active** button; Set active still works when the semester has events): it is the default filter on the attendance logs and the default semester of a new event. Once events exist under a school year or semester, Edit/Delete are hidden (and refused by the server and API) for the adviser - only the Super Admin can change it |
 
 #### Fine per day
 An event's **Fine per missed slot** is the default. When it spans several days the Add/Edit Event form lists

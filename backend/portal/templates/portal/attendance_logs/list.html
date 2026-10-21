@@ -1,15 +1,29 @@
 {% extends "portal/base.html" %}
+{% load static %}
 {% block title %}Attendance Logs{% endblock %}
 {% block page_title %}Attendance Logs{% endblock %}
 
 {% block content %}
-<div class="page-head">
+<style>
+  .print-head { display: none; }
+  @media print {
+    .print-head { display: flex; align-items: center; gap: .9rem; border-bottom: 2px solid #111; padding-bottom: .6rem; margin-bottom: .9rem; color: #111; }
+    .print-head img { width: 64px; height: 64px; object-fit: contain; }
+    .print-head h3 { margin: 0; font-size: 1.35rem; font-weight: 700; }
+    .print-head .print-sub { font-size: .85rem; color: #333; }
+    .card { border: 0 !important; box-shadow: none !important; }
+    .card-body { padding: 0 !important; }
+    .dataTables_length, .dataTables_filter, .dataTables_info, .dataTables_paginate { display: none !important; }
+  }
+</style>
+
+<div class="page-head no-print">
   <div>
     <h2 class="page-title">Attendance Logs</h2>
-    <div class="page-sub"><i class="bi bi-info-circle"></i> Read-only &mdash; logs come from instructor scanning.</div>
+    <div class="page-sub"><i class="bi bi-info-circle"></i> Read-only &mdash; a log is recorded for every successful scan; students without a scan are absent.</div>
   </div>
-  <div class="d-flex flex-wrap gap-2 no-print">
-    <a class="btn btn-outline-secondary btn-sm" id="logsCsv" href="?format=csv">
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-secondary btn-sm" id="logsCsv" href="?format=csv&tab={{ tab }}">
       <i class="bi bi-filetype-csv"></i> Download CSV
     </a>
     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
@@ -18,34 +32,64 @@
   </div>
 </div>
 
+<ul class="nav nav-tabs mb-3 no-print">
+  <li class="nav-item"><a class="nav-link {% if tab == 'event' %}active{% endif %}" href="?tab=event&semester={{ filters.semester }}"><i class="bi bi-calendar-event"></i> By Event</a></li>
+  <li class="nav-item"><a class="nav-link {% if tab == 'student' %}active{% endif %}" href="?tab=student&semester={{ filters.semester }}"><i class="bi bi-person"></i> By Student</a></li>
+</ul>
+
 <div class="card">
   <div class="card-body">
-    <!-- Filters -->
-    <form class="row g-2 mb-3 no-print"
-          hx-get="{% url 'portal:attendance_logs-list' %}"
-          hx-target="#logs-table-container" hx-swap="innerHTML"
-          hx-trigger="change delay:150ms, submit">
-      <input type="hidden" name="partial" value="table">
+    <form class="row g-2 mb-3 no-print" method="get" id="logsFilters" onchange="this.submit()">
+      <input type="hidden" name="tab" value="{{ tab }}">
       <div class="col-12 col-md-3">
-        <label class="form-label small mb-1">Event</label>
-        <select name="event" class="form-select form-select-sm">
-          <option value="">All events</option>
-          {% for e in events %}
-            <option value="{{ e.id }}" {% if filters.event == e.id|stringformat:'s' %}selected{% endif %}>{{ e.name }}</option>
+        <label class="form-label small mb-1">Semester</label>
+        <select name="semester" class="form-select form-select-sm">
+          <option value="" {% if not filters.semester %}selected{% endif %}>All semesters</option>
+          {% for s in semesters %}
+            <option value="{{ s.id }}" {% if filters.semester == s.id|stringformat:'s' %}selected{% endif %}>{{ s.school_year.sy }} &middot; {{ s.get_name_display }}{% if s.is_active %} (active){% endif %}</option>
           {% endfor %}
         </select>
       </div>
-      <div class="col-12 col-md-3">
-        <label class="form-label small mb-1">Student</label>
-        <select name="student" class="form-select form-select-sm">
-          <option value="">All students</option>
-          {% for s in students %}
-            <option value="{{ s.id }}" {% if filters.student == s.id|stringformat:'s' %}selected{% endif %}>
-              {{ s.student_number }} — {{ s.user.get_full_name|default:s.user.username }}
-            </option>
-          {% endfor %}
-        </select>
-      </div>
+      {% if tab == 'student' %}
+        <div class="col-12 col-md-4">
+          <label class="form-label small mb-1">Student</label>
+          <select name="student" class="form-select form-select-sm">
+            <option value="">Select a student&hellip;</option>
+            {% for s in students %}
+              <option value="{{ s.id }}" {% if filters.student == s.id|stringformat:'s' %}selected{% endif %}>{{ s.student_number }} &mdash; {{ s.user.get_full_name|default:s.user.username }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label small mb-1">Event</label>
+          <select name="event" class="form-select form-select-sm">
+            <option value="">All events</option>
+            {% for e in events %}
+              <option value="{{ e.id }}" {% if filters.event == e.id|stringformat:'s' %}selected{% endif %}>{{ e.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      {% else %}
+        <div class="col-12 col-md-4">
+          <label class="form-label small mb-1">Event</label>
+          <select name="event" class="form-select form-select-sm">
+            {% for e in events %}
+              <option value="{{ e.id }}" {% if filters.event == e.id|stringformat:'s' %}selected{% endif %}>{{ e.name }}</option>
+            {% empty %}
+              <option value="">No events in this semester</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label small mb-1">Section</label>
+          <select name="section" class="form-select form-select-sm">
+            <option value="">All sections</option>
+            {% for sec in sections %}
+              <option value="{{ sec }}" {% if filters.section == sec %}selected{% endif %}>{{ sec }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      {% endif %}
       <div class="col-6 col-md-2">
         <label class="form-label small mb-1">Type</label>
         <select name="attendance_type" class="form-select form-select-sm">
@@ -55,56 +99,32 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-6 col-md-2">
-        <label class="form-label small mb-1">Status</label>
-        <select name="status" class="form-select form-select-sm">
-          <option value="">All</option>
-          {% for val, label in statuses %}
-            <option value="{{ val }}" {% if filters.status == val %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-6 col-md-2">
-        <label class="form-label small mb-1">Year</label>
-        <select name="year_level" class="form-select form-select-sm">
-          <option value="">All years</option>
-          {% for val, label in year_levels %}
-            <option value="{{ val }}" {% if filters.year_level == val %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-6 col-md-2">
-        <label class="form-label small mb-1">Section</label>
-        <select name="section" class="form-select form-select-sm">
-          <option value="">All sections</option>
-          {% for sec in sections %}
-            <option value="{{ sec }}" {% if filters.section == sec %}selected{% endif %}>{{ sec }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-6 col-md-1">
-        <label class="form-label small mb-1">From</label>
-        <input type="date" name="date_from" value="{{ filters.date_from }}" class="form-control form-control-sm">
-      </div>
-      <div class="col-6 col-md-1">
-        <label class="form-label small mb-1">To</label>
-        <input type="date" name="date_to" value="{{ filters.date_to }}" class="form-control form-control-sm">
-      </div>
     </form>
 
-    <h5 class="d-none d-print-block">Attendance Logs</h5>
-    <div id="logs-table-container">
-      {% include "portal/attendance_logs/partials/table.html" %}
+    {# Printed header: ITE logo + the event (By Event) or the student (By Student). #}
+    <div class="print-head">
+      <img src="{% if ui.logo_url %}{{ ui.logo_url }}{% else %}{% static 'portal/img/ite-logo.png' %}{% endif %}" alt="ITE logo">
+      <div>
+        {% if tab == 'event' %}
+          <h3>{{ event_obj.name|default:"Attendance Logs" }}</h3>
+          <div class="print-sub">{% if event_obj %}{{ event_obj.semester }} &middot; {{ event_obj.start_date|date:"M d, Y" }}{% if event_obj.end_date != event_obj.start_date %} &ndash; {{ event_obj.end_date|date:"M d, Y" }}{% endif %}{% endif %}</div>
+        {% else %}
+          <h3>{% if student_obj %}{{ student_obj.user.get_full_name|default:student_obj.user.username }}{% else %}Attendance Logs{% endif %}</h3>
+          <div class="print-sub">{% if student_obj %}{{ student_obj.student_number }}{% if student_obj.year_section %} &middot; {{ student_obj.year_section }}{% endif %} &middot; {% if semester %}{{ semester }}{% else %}All semesters{% endif %}{% endif %}</div>
+        {% endif %}
+      </div>
     </div>
+
+    {% if tab == 'student' and not student_obj %}
+      <div class="text-center text-muted py-5 no-print">
+        <i class="bi bi-person-lines-fill fs-1 d-block mb-2"></i>
+        Select a <strong>student</strong> to see their attendance logs.
+      </div>
+    {% elif tab == 'event' %}
+      {% include "portal/attendance_logs/table_event.html" %}
+    {% else %}
+      {% include "portal/attendance_logs/table_student.html" %}
+    {% endif %}
   </div>
 </div>
-<script>
-  // "Download CSV" exports exactly what the filters currently select.
-  document.getElementById('logsCsv').addEventListener('click', function (e) {
-    var form = document.querySelector('form[hx-target="#logs-table-container"]');
-    var p = new URLSearchParams(new FormData(form));
-    p.delete('partial'); p.set('format', 'csv');
-    this.href = '?' + p.toString();
-  });
-</script>
 {% endblock %}

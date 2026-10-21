@@ -118,6 +118,7 @@ Table attendance_semester [headercolor: #2b8416] {
   id             bigint        [pk, increment]
   school_year_id bigint        [not null]
   name           semester_name [not null]
+  is_active      boolean       [not null, default: false, note: 'The current semester (at most one is true): default filter on attendance pages and default for new events']
 
   indexes {
     (school_year_id, name) [unique]
@@ -179,7 +180,7 @@ Table attendance_attendancelog [headercolor: #379c1c] {
   event_id        bigint            [not null]
   date            date              [not null]
   attendance_type attendance_type   [not null]
-  status          attendance_status [not null, default: 'ABSENT']
+  status          attendance_status [not null, default: 'ABSENT', note: 'Only scans are stored (PRESENT); absences are derived from missing rows']
   scanned_at      timestamptz       [null, note: 'Server clock at scan time']
   scanned_by_id   bigint            [null, note: 'Instructor who scanned (accountability)']
 

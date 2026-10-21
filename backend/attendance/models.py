@@ -15,7 +15,7 @@ from io import BytesIO
 import qrcode
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
-from django.db import models
+from django.db import models, transaction
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
 
@@ -69,10 +69,39 @@ class Semester(models.Model):
         SchoolYear, on_delete=models.CASCADE, related_name="semesters"
     )
     name = models.CharField(max_length=10, choices=Name.choices)
+    is_active = models.BooleanField(
+        default=False,
+        help_text="The current semester: the default filter on the attendance pages and the "
+                  "default semester of a new event. Only one semester is active at a time.",
+    )
 
     class Meta:
         ordering = ["-school_year__sy", "name"]
         unique_together = ("school_year", "name")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["is_active"], condition=models.Q(is_active=True), name="uniq_active_semester",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        # Activating this semester deactivates whichever one was active before.
+        with transaction.atomic():
+            if self._state.adding and not Semester.objects.filter(is_active=True).exists():
+                self.is_active = True          # the first semester ever created starts out active
+            if self.is_active:
+                Semester.objects.exclude(pk=self.pk).filter(is_active=True).update(is_active=False)
+            super().save(*args, **kwargs)
+
+    def validate_constraints(self, exclude=None):
+        # The only constraint is "one active semester", which save() resolves by deactivating
+        # the previous one; forms/serializers must not reject activating another semester.
+        return
+
+    @classmethod
+    def current(cls):
+        """The active semester, or ``None`` when none is marked active."""
+        return cls.objects.select_related("school_year").filter(is_active=True).first()
 
     def __str__(self):
         return f"{self.school_year.sy} {self.name}"

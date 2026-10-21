@@ -103,6 +103,10 @@ class EventForm(BootstrapModelForm):
             self.fields[name].input_formats = ["%Y-%m-%d"]
         for name in self.TIME_FIELDS:
             self.fields[name].input_formats = ["%H:%M", "%H:%M:%S"]
+        if not (self.instance and self.instance.pk) and not self.is_bound:
+            current = Semester.current()          # new events default to the active semester
+            if current is not None:
+                self.fields["semester"].initial = current.pk
         self.fields["fine_rate"].label = "Fine per missed slot"
         self.fields["fine_rate"].help_text = (
             "Default amount charged per missed slot. For a multi-day event you can set a "
@@ -202,7 +206,12 @@ class SchoolYearForm(BootstrapModelForm):
 class SemesterForm(BootstrapModelForm):
     class Meta:
         model = Semester
-        fields = ["school_year", "name"]
+        fields = ["school_year", "name", "is_active"]
+        labels = {"is_active": "Active semester"}
+        help_texts = {
+            "is_active": "Default filter on the attendance pages and default semester for new events. "
+                         "Activating this one deactivates the current one.",
+        }
 
 
 # ---------------------------------------------------------------------------

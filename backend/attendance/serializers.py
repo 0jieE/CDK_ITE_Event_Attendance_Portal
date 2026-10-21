@@ -40,7 +40,10 @@ class SemesterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Semester
-        fields = ["id", "school_year", "school_year_label", "name", "label"]
+        fields = ["id", "school_year", "school_year_label", "name", "label", "is_active"]
+        # "Only one active semester" is enforced by Semester.save() (which deactivates the
+        # previous one), so DRF must not reject activating a second semester.
+        extra_kwargs = {"is_active": {"validators": []}}
 
 
 class EventSerializer(serializers.ModelSerializer):

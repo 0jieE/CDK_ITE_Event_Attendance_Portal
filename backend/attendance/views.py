@@ -47,7 +47,9 @@ class _LockedWhenUsedMixin:
             )
 
     def update(self, request, *args, **kwargs):      # PUT and PATCH
-        self._guard()
+        # Switching the active semester is routine (every term), not an edit of the record.
+        if set(request.data.keys()) != {"is_active"}:
+            self._guard()
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):

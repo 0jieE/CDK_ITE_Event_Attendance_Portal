@@ -21,7 +21,7 @@ class AttendanceLogFilter(filters.FilterSet):
 
     class Meta:
         model = AttendanceLog
-        fields = ["event", "student", "date", "attendance_type", "status"]
+        fields = ["event", "student", "date", "attendance_type"]
 
 
 class FineFilter(filters.FilterSet):

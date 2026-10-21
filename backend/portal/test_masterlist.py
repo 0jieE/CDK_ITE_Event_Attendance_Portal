@@ -165,7 +165,7 @@ class TermsPageTests(TestCase):
         self.assertContains(r, "Add Semester")
         html = r.content.decode()
         # one flat row per semester: school year and semester in the same <tr>
-        self.assertRegex(html, r"(?s)<tr>\s*<td>\s*2030-2031.*?</td>\s*<td>1st Semester</td>")
+        self.assertRegex(html, r"(?s)<tr>\s*<td>\s*2030-2031.*?</td>\s*<td>\s*1st Semester")
         self.assertIn("2029-2030", html)             # a year without semesters still has a row
         self.assertIn("No semester yet", html)
         # the old list URLs show the same combined page; the table fragment refreshes via HTMX

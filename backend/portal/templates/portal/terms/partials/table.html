@@ -31,9 +31,17 @@ school year appear on its first row only and act on the school year itself.
                 </span>
               {% endif %}
             </td>
-            <td>{{ sem.get_name_display }}</td>
+            <td>{{ sem.get_name_display }}
+              {% if sem.is_active %}<span class="badge text-bg-success ms-1">Active</span>{% endif %}
+            </td>
             <td>{{ sem.event_count }}</td>
             <td class="text-end no-print">
+              {% if not sem.is_active %}
+                <button class="btn btn-sm btn-outline-success" title="Make this the active semester"
+                        hx-post="{% url 'portal:semesters-activate' sem.id %}" hx-swap="none">
+                  <i class="bi bi-check2-circle"></i> Set active
+                </button>
+              {% endif %}
               {% if sem.locked and not is_super %}
                 <span class="text-muted small" title="Events already exist - only the Super Admin can change this"><i class="bi bi-lock"></i> Locked</span>
               {% else %}

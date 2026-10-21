@@ -260,11 +260,9 @@ def attendance_report(*, semester=None, event=None, date_from=None, date_to=None
             logs = logs.filter(date__gte=date_from)
         if date_to:
             logs = logs.filter(date__lte=date_to)
-        agg = logs.aggregate(
-            total=Count("id"),
-            present=Count("id", filter=Q(status=AttendanceLog.Status.PRESENT)),
-            absent=Count("id", filter=Q(status=AttendanceLog.Status.ABSENT)),
-        )
+        # Only scans are stored (a PRESENT row); absences are never recorded as rows, so
+        # there is no meaningful "absent" count to report here.
+        present = logs.filter(status=AttendanceLog.Status.PRESENT).count()
         rows.append(
             {
                 "event_id": ev.id,
@@ -272,9 +270,7 @@ def attendance_report(*, semester=None, event=None, date_from=None, date_to=None
                 "semester": str(ev.semester),
                 "start_date": ev.start_date,
                 "end_date": ev.end_date,
-                "total_logs": agg["total"] or 0,
-                "present": agg["present"] or 0,
-                "absent": agg["absent"] or 0,
+                "present": present,
             }
         )
     return rows
