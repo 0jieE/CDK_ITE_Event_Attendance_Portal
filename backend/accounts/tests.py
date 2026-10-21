@@ -180,7 +180,7 @@ class PhotoApiTests(TestCase):
         self.assertIn("/profiles/", res.json()["student_photo"])
 
     def test_admin_can_set_a_photo_through_the_users_api(self):
-        admin = User.objects.create_user("adm", password="x", is_admin=True, is_staff=True)
+        admin = User.objects.create_user("adm", password="x", is_admin=True, is_staff=True, is_superuser=True)
         c = APIClient()
         c.force_authenticate(admin)
         res = c.post(reverse("user-list"), {

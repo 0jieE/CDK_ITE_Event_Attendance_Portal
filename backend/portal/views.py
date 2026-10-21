@@ -36,7 +36,6 @@ from .forms import (
     SchoolYearForm,
     SemesterForm,
     StudentForm,
-    UserForm,
 )
 from . import masterlist
 from .mixins import (
@@ -120,24 +119,6 @@ class EventsSection(CrudSection):
         return super().get_queryset(request).prefetch_related("day_fines")
 
 
-class UsersSection(CrudSection):
-    section = "users"
-    title = "Users"
-    singular = "User"
-    model = User
-    form_class = UserForm
-    table_template = "portal/users/partials/table.html"
-    order_by = ("last_name", "first_name")
-
-    def get_queryset(self, request=None):
-        qs = super().get_queryset(request)
-        # Super Admin accounts are invisible (and so untouchable) to a Department Adviser:
-        # otherwise an adviser could reset the Super Admin's password from this page.
-        if request is None or not request.user.is_superuser:
-            qs = qs.filter(is_superuser=False)
-        return qs
-
-
 class _LinkedUserSection(CrudSection):
     """Shared behaviour for Instructor/Student sections (delete linked user)."""
 
@@ -169,14 +150,29 @@ class StudentsSection(_LinkedUserSection):
     order_by = ("student_number",)
 
 
+@admin_required
+def terms_view(request):
+    """School years and their semesters in a single table (two Add buttons on top)."""
+    context = {
+        "active": "terms",
+        "school_years": SchoolYear.objects.prefetch_related("semesters__events").order_by("-sy"),
+    }
+    if is_htmx(request) and request.GET.get("partial") == "table":
+        return render(request, "portal/terms/partials/table.html", context)
+    return render(request, "portal/terms/list.html", context)
+
+
 class SchoolYearsSection(CrudSection):
     section = "school_years"
     title = "School Years"
     singular = "School Year"
     model = SchoolYear
     form_class = SchoolYearForm
-    table_template = "portal/school_years/partials/table.html"
+    table_template = "portal/terms/partials/table.html"
     order_by = ("-sy",)
+
+    def list_view(self, request):
+        return terms_view(request)       # one combined page; only add/edit/delete live here
 
 
 class SemestersSection(CrudSection):
@@ -185,14 +181,16 @@ class SemestersSection(CrudSection):
     singular = "Semester"
     model = Semester
     form_class = SemesterForm
-    table_template = "portal/semesters/partials/table.html"
+    table_template = "portal/terms/partials/table.html"
     select_related = ("school_year",)
     order_by = ("-school_year__sy", "name")
+
+    def list_view(self, request):
+        return terms_view(request)
 
 
 #: Declarative CRUD sections; the URLConf iterates this list.
 SECTIONS = [
-    UsersSection(),
     InstructorsSection(),
     StudentsSection(),
     SchoolYearsSection(),

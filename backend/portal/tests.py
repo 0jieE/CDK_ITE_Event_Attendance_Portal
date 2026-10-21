@@ -108,8 +108,8 @@ class PortalPagesRenderTests(TestCase):
     """Every portal page renders for the adviser with the responsive shell."""
 
     PAGES = [
-        "portal:dashboard", "portal:users-list", "portal:instructors-list",
-        "portal:students-list", "portal:school_years-list", "portal:semesters-list",
+        "portal:dashboard", "portal:instructors-list",
+        "portal:students-list", "portal:terms-list", "portal:school_years-list", "portal:semesters-list",
         "portal:events-list", "portal:attendance_logs-list", "portal:fines-list",
         "portal:reports-attendance", "portal:reports-financial", "portal:settings",
     ]

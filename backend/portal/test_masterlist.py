@@ -145,5 +145,38 @@ class LogsAndNavTests(TestCase):
         self.assertEqual([c["label"] for c in nav["Reports"]["children"]],
                          ["Attendance Report", "Attendance Logs", "Financial Report", "Fines"])
         self.assertEqual([c["label"] for c in nav["Settings"]["children"]],
-                         ["Appearance", "School Years", "Semesters"])
+                         ["Appearance", "School Years & Semesters"])
         self.assertNotIn("School Years", nav)
+
+
+class TermsPageTests(TestCase):
+    def setUp(self):
+        User.objects.create_user("adviser", password="pw-12345-x", is_admin=True)
+        self.client.login(username="adviser", password="pw-12345-x")
+
+    def test_one_page_two_add_buttons_nested_rows(self):
+        from attendance.models import SchoolYear, Semester
+
+        sy = SchoolYear.objects.create(sy="2030-2031")
+        Semester.objects.create(school_year=sy, name="1st")
+        SchoolYear.objects.create(sy="2029-2030")
+        r = self.client.get(reverse("portal:terms-list"))
+        self.assertContains(r, "Add School Year")
+        self.assertContains(r, "Add Semester")
+        html = r.content.decode()
+        self.assertLess(html.index("2030-2031"), html.index("1st Semester"))
+        self.assertIn("2029-2030", html)
+        # the old list URLs show the same combined page; the table fragment refreshes via HTMX
+        self.assertContains(self.client.get(reverse("portal:semesters-list")), "Add School Year")
+        part = self.client.get(reverse("portal:terms-list") + "?partial=table", HTTP_HX_REQUEST="true")
+        self.assertNotContains(part, "<html")
+        self.assertContains(part, "1st Semester")
+
+    def test_add_forms_still_work(self):
+        r = self.client.post(reverse("portal:school_years-add"), {"sy": "2031-2032"}, HTTP_HX_REQUEST="true")
+        self.assertEqual(r.status_code, 204, r.content[:200])
+        from attendance.models import SchoolYear
+        sy = SchoolYear.objects.get(sy="2031-2032")
+        r = self.client.post(reverse("portal:semesters-add"), {"school_year": sy.pk, "name": "2nd"}, HTTP_HX_REQUEST="true")
+        self.assertEqual(r.status_code, 204, r.content[:200])
+        self.assertEqual(sy.semesters.count(), 1)

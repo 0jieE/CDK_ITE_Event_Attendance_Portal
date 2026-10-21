@@ -28,7 +28,7 @@ class EmailRemovedTests(TestCase):
         self.assertEqual(User.objects.create_user("legacy", "old@x.ph", "pw").username, "legacy")
 
     def test_api_payloads_do_not_expose_email(self):
-        admin = User.objects.create_user("adm", password="x", is_admin=True)
+        admin = User.objects.create_user("adm", password="x", is_admin=True, is_superuser=True, is_staff=True)
         c = APIClient()
         c.force_authenticate(admin)
         self.assertNotIn("email", c.get(reverse("me")).json())

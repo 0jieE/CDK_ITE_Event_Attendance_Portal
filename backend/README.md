@@ -149,7 +149,7 @@ endpoints require the `IsAdmin` role.**
 
 | Resource | Methods | Notes |
 |----------|---------|-------|
-| `users/` | CRUD | role flags; passwords hashed |
+| `users/` | CRUD | **Super Admin only** (the adviser gets `403`); role flags incl. `is_admin` / `is_staff` / `is_superuser`; passwords hashed |
 | `instructors/` | CRUD | creates linked user (`is_instructor`) |
 | `students/` | CRUD | creates linked user (`is_student`); `?semester=&school_year=&year_level=&section=` |
 | `school-years/` | CRUD | |
@@ -183,9 +183,9 @@ student a username and password:
 
 | Role | Where | Notes |
 |------|-------|-------|
-| Super Admin (`is_superuser`) | portal **and** `/admin/` (Django Administration) | created by `seed_superadmin` / `SUPERADMIN_*`; invisible and untouchable to the adviser |
-| Department Adviser (`is_admin`) | **portal only** | `seed_admin`; never `is_staff`, so `/admin/` rejects them |
-| Instructor / Student | mobile app | an instructor created on the Users page automatically gets the Instructor profile |
+| Super Admin (`is_superuser`) | portal **and** `/admin/` (Django Administration) | created by `seed_superadmin` / `SUPERADMIN_*`; the **only** role that can create an adviser or another Super Admin (Django Administration -> Users, or `/api/users/`) |
+| Department Adviser (`is_admin`) | **portal only** | `seed_admin`; never `is_staff`, so `/admin/` rejects them. There is **no Users page** in the portal, so an adviser cannot create another adviser |
+| Instructor / Student | mobile app | created by the adviser on the Instructors / Students pages (an Instructor profile is always created with the user) |
 
 ### Mobile / system endpoints
 
@@ -272,7 +272,6 @@ The adviser can use **only the portal**; Django Administration is for the Super 
 | Section | URL | Notes |
 |---------|-----|-------|
 | Dashboard | `/portal/` | cards + per-event table + collected-vs-outstanding chart |
-| Users | `/portal/users/` | role flags, password set/reset |
 | Instructors | `/portal/instructors/` | creates + links the `User` in one form |
 | Students | `/portal/students/` | linked `User` + `student_number` + **year level & section**; **Import masterlist** (CSV/Excel) + printable credentials |
 | Events | `/portal/events/` | dates + `required_types` multi-select; validates `end ≥ start`; **fine per day** for multi-day events |
@@ -281,10 +280,9 @@ The adviser can use **only the portal**; Django Administration is for the Super 
 | ↳ Attendance Report | `/portal/reports/attendance/` | filters + **Download CSV** + **Print** |
 | ↳ Financial Report | `/portal/reports/financial/` | filters + **Download CSV** + **Print** |
 | ↳ Fines | `/portal/fines/` | lives under Reports; see below |
-| **Settings** (sidebar group) | — | Appearance, School Years, Semesters |
+| **Settings** (sidebar group) | — | Appearance, School Years & Semesters |
 | ↳ Appearance | `/portal/settings/` | UI theme, light/dark mode, branding & logo |
-| ↳ School Years | `/portal/school_years/` | |
-| ↳ Semesters | `/portal/semesters/` | select by School Year |
+| ↳ School Years & Semesters | `/portal/terms/` | **one table** (each school year followed by its semesters) with **Add School Year** and **Add Semester** buttons |
 
 #### Fine per day
 An event's **Fine per missed slot** is the default. When it spans several days the Add/Edit Event form lists
@@ -320,7 +318,7 @@ Theme and mode **preview live** on the Settings page as you change them; click
 
 ### Profile photos & image storage
 Every user has an optional **profile photo** (`User.profile_image`), set from the portal
-(Users / Instructors / Students forms) or by the user via `POST /api/me/photo/`. Photos are
+(Instructors / Students forms; Django Administration for the Super Admin) or by the user via `POST /api/me/photo/`. Photos are
 normalised on save (rotated, metadata stripped, max 1024 px). They - together with the QR
 PNGs and the portal logo - are stored on **Cloudinary** in the `ite-attendance/` folder
 (`profiles/`, `qrcodes/`, `branding/`) when `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET` are set,

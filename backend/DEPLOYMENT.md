@@ -92,7 +92,7 @@ ite-attendance/
    (QRs are regenerated from their token; safe to re-run).
 
 Without the three `CLOUDINARY_*` values the app falls back to local disk (`media_data` volume).
-Photos are managed in the portal (**Users / Instructors / Students -> Add/Edit -> Profile
+Photos are managed in the portal (**Instructors / Students -> Add/Edit -> Profile
 photo**); apps can also use `POST/DELETE /api/me/photo/`. Instructors see the student's
 photo in the scan result.
 

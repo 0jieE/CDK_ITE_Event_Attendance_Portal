@@ -26,6 +26,8 @@ urlpatterns = [
     path("students/credentials/", views.students_credentials_view, name="students-credentials"),
     path("students/credentials/reset/", views.students_credentials_reset_view,
          name="students-credentials-reset"),
+    # School years + semesters on one page (their add/edit/delete routes come from the CRUD sections)
+    path("terms/", views.terms_view, name="terms-list"),
     # Settings
     path("settings/", views.settings_view, name="settings"),
 ]

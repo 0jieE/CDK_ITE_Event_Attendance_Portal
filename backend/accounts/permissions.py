@@ -18,6 +18,20 @@ class IsAdmin(BasePermission):
         return bool(user and user.is_authenticated and (user.is_admin or user.is_superuser))
 
 
+class IsSuperAdmin(BasePermission):
+    """Allow only the Super Admin (``is_superuser``).
+
+    Raw user accounts - and so the ability to create another adviser (``is_admin``) or a
+    Super Admin - are reserved for them. The adviser creates instructors and students only.
+    """
+
+    message = "Only the Super Admin may manage user accounts."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user and user.is_authenticated and user.is_superuser)
+
+
 class IsInstructor(BasePermission):
     """Allow only authenticated instructors. (Reserved for the mobile phase.)"""
 

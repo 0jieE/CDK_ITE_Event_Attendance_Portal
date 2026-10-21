@@ -82,6 +82,8 @@ class UserSerializer(ProfileImageMixin, serializers.ModelSerializer):
             "is_instructor",
             "is_student",
             "is_active",
+            "is_staff",
+            "is_superuser",
             "role",
             "date_joined",
             "profile_image",

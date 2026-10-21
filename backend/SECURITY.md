@@ -51,10 +51,11 @@ Related accepted trade-offs:
   generated passwords, which are shown once on the printable slips and stored only as hashes.
 - Imported passwords are random (8 characters, no look-alike characters) and use a lighter PBKDF2
   cost so a big import fits in one request; Django re-hashes them at the full cost on first login.
-- The **Super Admin** (`is_superuser` + `is_staff`) is the only account that can open Django
-  Administration. The **Department Adviser** is portal-only (`is_staff=False`), and Super Admin
-  accounts are hidden from the adviser in the portal and the API, so they cannot be edited, deleted
-  or have their password reset by the adviser.
+- There is **no Users page** and `/api/users/` is Super Admin only, so the adviser cannot create
+  another adviser or Super Admin; only the **Super Admin** (`is_superuser` + `is_staff`) can, in Django
+  Administration. It is also the only account that can open Django Administration. The
+  **Department Adviser** is portal-only (`is_staff=False`) and has no way to edit, delete or reset the
+  password of a Super Admin or another adviser.
 - Email is not stored at all (not needed: sign-in is username + password), so there is no
   personal email data to leak.
 
@@ -67,8 +68,8 @@ Related accepted trade-offs:
   token, in a Cloudinary folder with no public listing. Anyone with a photo URL can view
   that one image; there is no way to enumerate others.
 - **Own data only:** `POST/DELETE /api/me/photo/` only ever touches `request.user` and is
-  rate-limited (`THROTTLE_PHOTO`, default 10/min); admins manage anyone's photo via the
-  portal/`/api/users/`.
+  rate-limited (`THROTTLE_PHOTO`, default 10/min); the adviser manages
+  instructors' and students' photos in the portal.
 - **Secrets:** the Cloudinary API secret lives only in `.env.prod` (gitignored). If it is
   ever pasted somewhere public, **regenerate it** in the Cloudinary console and update `.env.prod`.
 - Old photos are deleted from Cloudinary when replaced/cleared or when the user is deleted.

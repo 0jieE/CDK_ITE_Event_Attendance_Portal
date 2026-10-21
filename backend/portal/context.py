@@ -10,7 +10,6 @@ from django.urls import NoReverseMatch, reverse
 # Each item: {key, label, icon, url} OR {key, label, icon, children:[...]}.
 _NAV = [
     {"key": "dashboard", "label": "Dashboard", "url": "portal:dashboard", "icon": "speedometer2"},
-    {"key": "users", "label": "Users", "url": "portal:users-list", "icon": "people"},
     {"key": "instructors", "label": "Instructors", "url": "portal:instructors-list", "icon": "person-badge"},
     {"key": "students", "label": "Students", "url": "portal:students-list", "icon": "mortarboard"},
     {"key": "events", "label": "Events", "url": "portal:events-list", "icon": "calendar-event"},
@@ -22,8 +21,7 @@ _NAV = [
     ]},
     {"key": "settings_group", "label": "Settings", "icon": "gear", "children": [
         {"key": "settings", "label": "Appearance", "url": "portal:settings", "icon": "palette"},
-        {"key": "school_years", "label": "School Years", "url": "portal:school_years-list", "icon": "calendar3"},
-        {"key": "semesters", "label": "Semesters", "url": "portal:semesters-list", "icon": "calendar-week"},
+        {"key": "terms", "label": "School Years & Semesters", "url": "portal:terms-list", "icon": "calendar3"},
     ]},
 ]
 

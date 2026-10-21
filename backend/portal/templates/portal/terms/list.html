@@ -1,0 +1,33 @@
+{% extends "portal/base.html" %}
+{% block title %}School Years &amp; Semesters{% endblock %}
+{% block page_title %}School Years &amp; Semesters{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h2 class="page-title">School Years &amp; Semesters</h2>
+    <div class="page-sub"><i class="bi bi-info-circle"></i> Add a school year first, then its semesters. Events belong to a semester.</div>
+  </div>
+  <div class="page-actions no-print">
+    <button class="btn btn-outline-primary"
+            hx-get="{% url 'portal:school_years-add' %}" hx-target="#modalContent" hx-swap="innerHTML">
+      <i class="bi bi-plus-lg"></i> Add School Year
+    </button>
+    <button class="btn btn-primary"
+            hx-get="{% url 'portal:semesters-add' %}" hx-target="#modalContent" hx-swap="innerHTML">
+      <i class="bi bi-plus-lg"></i> Add Semester
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <div id="terms-table-container"
+         hx-get="{% url 'portal:terms-list' %}?partial=table"
+         hx-trigger="refresh-school_years from:body, refresh-semesters from:body"
+         hx-target="this" hx-swap="innerHTML">
+      {% include "portal/terms/partials/table.html" %}
+    </div>
+  </div>
+</div>
+{% endblock %}

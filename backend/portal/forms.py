@@ -206,60 +206,6 @@ class SemesterForm(BootstrapModelForm):
 
 
 # ---------------------------------------------------------------------------
-# Users
-# ---------------------------------------------------------------------------
-class UserForm(BootstrapModelForm):
-    """Create/edit a user with role flags; password optional on edit."""
-
-    password = forms.CharField(
-        widget=forms.PasswordInput(render_value=False),
-        required=False,
-        help_text="Leave blank to keep the current password (required when creating).",
-    )
-
-    class Meta:
-        model = User
-        fields = [
-            "username",
-            "first_name",
-            "middle_name",
-            "last_name",
-            "profile_image",
-            "is_admin",
-            "is_instructor",
-            "is_student",
-            "is_active",
-        ]
-
-    def clean_password(self):
-        pwd = self.cleaned_data.get("password")
-        if pwd:
-            validate_password(pwd, self.instance)
-        elif self.instance.pk is None:
-            raise forms.ValidationError("Password is required when creating a user.")
-        return pwd
-
-    def clean_is_student(self):
-        wanted = self.cleaned_data.get("is_student")
-        has_profile = bool(self.instance.pk) and Student.objects.filter(user=self.instance).exists()
-        if wanted and not has_profile:
-            raise forms.ValidationError(
-                "A student account needs a student number - add students on the Students page "
-                "(or import a masterlist) instead."
-            )
-        return wanted
-
-    def save(self, commit=True):
-        user = super().save(commit=False)
-        pwd = self.cleaned_data.get("password")
-        if pwd:
-            user.set_password(pwd)
-        if commit:
-            user.save()
-        return user
-
-
-# ---------------------------------------------------------------------------
 # Instructors / Students — manage the linked User in the same form
 # ---------------------------------------------------------------------------
 class LinkedUserForm(BootstrapModelForm):

@@ -58,57 +58,62 @@ class RoleAccessTests(TestCase):
         self.assertEqual(self.client.get(reverse("portal:dashboard")).status_code, 403)
 
 
-class SuperAdminIsProtectedFromAdvisersTests(TestCase):
-    """An adviser must not be able to take over the Super Admin account."""
+class OnlySuperAdminManagesAccountsTests(TestCase):
+    """No Users page; only the Super Admin can create an adviser or another Super Admin."""
 
     def setUp(self):
         self.boss = make_super()
         self.adv = make_adviser()
 
-    def test_portal_users_page_hides_the_super_admin_from_advisers(self):
-        self.client.force_login(self.adv)
-        html = self.client.get(reverse("portal:users-list")).content.decode()
-        self.assertNotIn(">boss<", html)
-        self.assertIn(">adv<", html)
-
-    def test_adviser_cannot_open_edit_or_delete_the_super_admin(self):
-        self.client.force_login(self.adv)
-        self.assertEqual(self.client.get(reverse("portal:users-edit", args=[self.boss.pk])).status_code, 404)
-        res = self.client.post(reverse("portal:users-edit", args=[self.boss.pk]),
-                               {"username": "boss", "password": "Hacked-Pass-123!", "is_active": "on"})
-        self.assertEqual(res.status_code, 404)
-        self.assertEqual(self.client.post(reverse("portal:users-delete", args=[self.boss.pk])).status_code, 404)
-        self.boss.refresh_from_db()
-        self.assertFalse(self.boss.check_password("Hacked-Pass-123!"))
-        self.assertTrue(User.objects.filter(pk=self.boss.pk).exists())
-
-    def test_super_admin_sees_and_edits_super_admins(self):
+    def test_portal_has_no_users_page(self):
         self.client.force_login(self.boss)
-        html = self.client.get(reverse("portal:users-list")).content.decode()
-        self.assertIn(">boss<", html)
-        self.assertEqual(self.client.get(reverse("portal:users-edit", args=[self.boss.pk])).status_code, 200)
+        for url in ("/portal/users/", "/portal/users/add/", f"/portal/users/{self.adv.pk}/edit/"):
+            self.assertEqual(self.client.get(url).status_code, 404)
+        html = self.client.get(reverse("portal:dashboard")).content.decode()
+        self.assertNotIn("/portal/users/", html)
 
-    def test_api_users_endpoint_hides_and_protects_the_super_admin(self):
+    def test_adviser_is_refused_by_the_users_api(self):
         api = APIClient()
         api.force_authenticate(self.adv)
-        names = [u["username"] for u in api.get(reverse("user-list")).json()["results"]]
-        self.assertIn("adv", names)
-        self.assertNotIn("boss", names)
-        self.assertEqual(api.get(reverse("user-detail", args=[self.boss.pk])).status_code, 404)
-        self.assertEqual(api.patch(reverse("user-detail", args=[self.boss.pk]), {"first_name": "x"}).status_code, 404)
-        self.assertEqual(api.delete(reverse("user-detail", args=[self.boss.pk])).status_code, 404)
-        sup = APIClient()
-        sup.force_authenticate(self.boss)
-        self.assertIn("boss", [u["username"] for u in sup.get(reverse("user-list")).json()["results"]])
+        self.assertEqual(api.get(reverse("user-list")).status_code, 403)
+        res = api.post(reverse("user-list"), {"username": "sneaky", "password": STRONG, "is_admin": True},
+                       format="json")
+        self.assertEqual(res.status_code, 403)
+        self.assertFalse(User.objects.filter(username="sneaky").exists())
+        self.assertEqual(api.patch(reverse("user-detail", args=[self.boss.pk]), {"first_name": "x"}).status_code, 403)
+        self.assertEqual(api.delete(reverse("user-detail", args=[self.boss.pk])).status_code, 403)
 
-    def test_an_adviser_cannot_grant_super_admin_through_the_api(self):
+    def test_super_admin_can_create_an_adviser_through_the_api(self):
+        api = APIClient()
+        api.force_authenticate(self.boss)
+        res = api.post(reverse("user-list"), {"username": "newadv", "password": STRONG, "is_admin": True},
+                       format="json")
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertTrue(User.objects.get(username="newadv").is_admin)
+
+    def test_instructor_and_student_creation_cannot_mint_an_adviser(self):
         api = APIClient()
         api.force_authenticate(self.adv)
-        res = api.post(reverse("user-list"), {"username": "sneaky", "password": STRONG,
-                                              "is_superuser": True, "is_staff": True}, format="json")
-        self.assertEqual(res.status_code, 201)
-        u = User.objects.get(username="sneaky")
-        self.assertFalse(u.is_superuser or u.is_staff)
+        res = api.post(reverse("instructor-list"), {"user": {
+            "username": "ins9", "password": STRONG, "first_name": "I", "last_name": "N",
+            "is_admin": True, "is_superuser": True, "is_staff": True}}, format="json")
+        self.assertEqual(res.status_code, 201, res.content)
+        u = User.objects.get(username="ins9")
+        self.assertTrue(u.is_instructor)
+        self.assertFalse(u.is_admin or u.is_superuser or u.is_staff)
+        # and the portal forms only ever set the profile's own role flag
+        self.client.force_login(self.adv)
+        self.client.post(reverse("portal:instructors-add"), {
+            "username": "ins10", "password": STRONG, "first_name": "I", "last_name": "N",
+            "is_active": "on", "is_admin": "on", "is_superuser": "on"}, HTTP_HX_REQUEST="true")
+        u = User.objects.get(username="ins10")
+        self.assertFalse(u.is_admin or u.is_superuser or u.is_staff)
+
+    def test_only_the_super_admin_opens_django_administration(self):
+        self.client.force_login(self.adv)
+        self.assertNotEqual(self.client.get("/admin/").status_code, 200)
+        self.client.force_login(self.boss)
+        self.assertEqual(self.client.get("/admin/accounts/user/add/").status_code, 200)
 
 
 class SeedCommandsTests(TestCase):
@@ -149,30 +154,18 @@ class SeedCommandsTests(TestCase):
 
 
 class InstructorAndStudentCreationTests(TestCase):
-    """The bug: a user created first on the Users page could not become an instructor."""
+    """A user flagged instructor always has a profile; instructors/students are created in one step."""
 
     def setUp(self):
         self.client.force_login(make_adviser())
 
-    def user_post(self, **over):
-        data = {"username": "prof.lim", "first_name": "Ana", "last_name": "Lim", "password": STRONG, "is_active": "on"}
-        data.update(over)
-        return self.client.post(reverse("portal:users-add"), data)
-
-    def test_user_created_first_as_an_instructor_gets_its_profile_automatically(self):
-        self.assertEqual(self.user_post(is_instructor="on").status_code, 204)
-        user = User.objects.get(username="prof.lim")
-        self.assertTrue(Instructor.objects.filter(user=user).exists())
-        html = self.client.get(reverse("portal:instructors-list")).content.decode()
-        self.assertIn("prof.lim", html)                       # appears on the Instructors page too
-
-    def test_the_instructor_form_then_gives_a_clear_error_for_a_taken_username(self):
-        self.user_post(is_instructor="on")
+    def test_the_instructor_form_gives_a_clear_error_for_a_taken_username(self):
+        User.objects.create_user("prof.lim", password="x")
         res = self.client.post(reverse("portal:instructors-add"), {
             "username": "prof.lim", "first_name": "Ana", "last_name": "Lim", "password": STRONG, "is_active": "on"})
         self.assertEqual(res.status_code, 422)
         self.assertIn("already exists", res.content.decode())
-        self.assertEqual(Instructor.objects.filter(user__username="prof.lim").count(), 1)
+        self.assertFalse(Instructor.objects.filter(user__username="prof.lim").exists())
 
     def test_creating_an_instructor_directly_works_and_edit_delete_round_trip(self):
         res = self.client.post(reverse("portal:instructors-add"), {
@@ -204,24 +197,9 @@ class InstructorAndStudentCreationTests(TestCase):
         st = Student.objects.get(student_number="2026-0001")
         self.assertTrue(st.user.is_student and st.user.check_password(STRONG))
 
-    def test_a_student_role_on_the_users_page_is_refused_with_guidance(self):
-        res = self.user_post(username="fake.student", is_student="on")
-        self.assertEqual(res.status_code, 422)
-        self.assertIn("student number", res.content.decode())
-        self.assertFalse(User.objects.filter(username="fake.student").exists())
-
-    def test_an_existing_student_can_still_be_edited_on_the_users_page(self):
-        u = User.objects.create_user("stu1", password="x", is_student=True, first_name="S")
-        Student.objects.create(user=u, student_number="N-1")
-        res = self.client.post(reverse("portal:users-edit", args=[u.pk]), {
-            "username": "stu1", "first_name": "Renamed", "is_student": "on", "is_active": "on"})
-        self.assertEqual(res.status_code, 204, res.content[:300])
-        u.refresh_from_db()
-        self.assertEqual(u.first_name, "Renamed")
-
     def test_creating_an_instructor_through_the_api_also_creates_the_profile(self):
         api = APIClient()
-        api.force_authenticate(User.objects.get(username="adv"))
+        api.force_authenticate(make_super())
         res = api.post(reverse("user-list"), {"username": "api.inst", "password": STRONG, "is_instructor": True},
                        format="json")
         self.assertEqual(res.status_code, 201)

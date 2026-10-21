@@ -14,7 +14,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from .images import validate_image_file
 from .models import Instructor, Student, User
-from .permissions import IsAdmin
+from .permissions import IsAdmin, IsSuperAdmin
 from .serializers import (
     InstructorSerializer,
     MeSerializer,
@@ -83,22 +83,18 @@ class MyPhotoView(APIView):
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    """CRUD for system users (any role)."""
+    """CRUD for system users (any role) - **Super Admin only**.
+
+    The Department Adviser has no access: they could otherwise mint another adviser.
+    """
 
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [IsSuperAdmin]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["is_admin", "is_instructor", "is_student", "is_active"]
     search_fields = ["username", "first_name", "middle_name", "last_name"]
     ordering_fields = ["username", "last_name", "date_joined"]
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        # Only a Super Admin can see or change Super Admin accounts.
-        if not self.request.user.is_superuser:
-            qs = qs.filter(is_superuser=False)
-        return qs
 
 
 class InstructorViewSet(viewsets.ModelViewSet):
