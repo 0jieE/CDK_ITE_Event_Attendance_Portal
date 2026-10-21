@@ -164,8 +164,10 @@ class TermsPageTests(TestCase):
         self.assertContains(r, "Add School Year")
         self.assertContains(r, "Add Semester")
         html = r.content.decode()
-        self.assertLess(html.index("2030-2031"), html.index("1st Semester"))
-        self.assertIn("2029-2030", html)
+        # one flat row per semester: school year and semester in the same <tr>
+        self.assertRegex(html, r"(?s)<tr>\s*<td>\s*2030-2031.*?</td>\s*<td>1st Semester</td>")
+        self.assertIn("2029-2030", html)             # a year without semesters still has a row
+        self.assertIn("No semester yet", html)
         # the old list URLs show the same combined page; the table fragment refreshes via HTMX
         self.assertContains(self.client.get(reverse("portal:semesters-list")), "Add School Year")
         part = self.client.get(reverse("portal:terms-list") + "?partial=table", HTTP_HX_REQUEST="true")

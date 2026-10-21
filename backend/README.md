@@ -282,7 +282,7 @@ The adviser can use **only the portal**; Django Administration is for the Super 
 | ↳ Fines | `/portal/fines/` | lives under Reports; see below |
 | **Settings** (sidebar group) | — | Appearance, School Years & Semesters |
 | ↳ Appearance | `/portal/settings/` | UI theme, light/dark mode, branding & logo |
-| ↳ School Years & Semesters | `/portal/terms/` | **one table** (each school year followed by its semesters) with **Add School Year** and **Add Semester** buttons |
+| ↳ School Years & Semesters | `/portal/terms/` | **one table** (School Year \| Semester \| Events \| Actions, a row per semester) with **Add School Year** and **Add Semester** buttons |
 
 #### Fine per day
 An event's **Fine per missed slot** is the default. When it spans several days the Add/Edit Event form lists
