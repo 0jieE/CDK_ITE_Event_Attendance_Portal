@@ -26,6 +26,19 @@ class ScanRequestSerializer(serializers.Serializer):
     token = serializers.CharField(max_length=64)
 
 
+class OfflineScanSerializer(serializers.Serializer):
+    """One scan the app queued while offline, with the moment it was scanned."""
+
+    token = serializers.CharField(max_length=64)
+    scanned_at = serializers.DateTimeField()
+
+
+class ScanSyncSerializer(serializers.Serializer):
+    """Body for ``POST /api/instructor/scans/sync/``."""
+
+    scans = OfflineScanSerializer(many=True, allow_empty=False, max_length=500)
+
+
 class ScanResultSerializer(serializers.Serializer):
     """Response shape for a scan (success or already-recorded)."""
 

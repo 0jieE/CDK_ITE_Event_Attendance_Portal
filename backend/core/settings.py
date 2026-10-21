@@ -253,6 +253,8 @@ REST_FRAMEWORK = {
         "refresh": env("THROTTLE_REFRESH", default="30/min"),
         # An instructor scanning a queue of students (per instructor).
         "scan": env("THROTTLE_SCAN", default="120/min"),
+        # Uploading scans queued offline (up to 500 per request).
+        "scan_sync": env("THROTTLE_SCAN_SYNC", default="30/min"),
         "photo": env("THROTTLE_PHOTO", default="10/min"),
         "password": env("THROTTLE_PASSWORD", default="5/min"),
     },

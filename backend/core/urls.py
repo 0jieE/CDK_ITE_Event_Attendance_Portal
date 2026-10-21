@@ -38,6 +38,8 @@ from core.views import healthz
 from attendance.mobile_views import (
     InstructorEventAttendanceView,
     InstructorEventsView,
+    InstructorOfflinePackView,
+    InstructorScanSyncView,
     InstructorScanView,
     InstructorScansView,
     StudentAttendanceView,
@@ -73,6 +75,9 @@ api_patterns = [
          name="instructor-event-attendance"),
     path("instructor/scan/", InstructorScanView.as_view(), name="instructor-scan"),
     path("instructor/scans/", InstructorScansView.as_view(), name="instructor-scans"),
+    path("instructor/scans/sync/", InstructorScanSyncView.as_view(), name="instructor-scans-sync"),
+    path("instructor/offline-pack/", InstructorOfflinePackView.as_view(),
+         name="instructor-offline-pack"),
     # --- Student (mobile, own data only) ---
     path("student/profile/", StudentProfileView.as_view(), name="student-profile"),
     path("student/profile/password/", StudentPasswordView.as_view(), name="student-password"),

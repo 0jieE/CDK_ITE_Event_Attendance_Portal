@@ -198,6 +198,8 @@ student a username and password:
 | `GET /api/instructor/events/{id}/attendance/` (`?date=`) | instructor | read-only class roster for one event-day: every student with PRESENT / ABSENT / PENDING per required slot, plus per-slot totals |
 | `POST /api/instructor/scan/` | instructor | scan a QR token; result includes `student_photo`. Rate-limited |
 | `GET /api/instructor/scans/` | instructor | the instructor's own recent scans |
+| `GET /api/instructor/offline-pack/` | instructor | for offline scanning: today's events (with slot windows), today's student QR codes as **SHA-256 hashes** (never raw tokens) with name/number and already-credited slots, and `server_time` |
+| `POST /api/instructor/scans/sync/` | instructor | upload scans queued offline: `{"scans": [{"token", "scanned_at"}]}` (max 500). Each is judged like a live scan **at its own `scanned_at`**; one result per scan (`http_status` 201/200/4xx + the scan body). Refused: `BAD_SCAN_TIME` (> 5 min in the future), `OFFLINE_TOO_OLD` (> 7 days). Rate-limited (`THROTTLE_SCAN_SYNC`) |
 | `GET /api/student/profile/` | student | own profile incl. name, username, year/section, photo |
 | `PATCH /api/student/profile/` | student | edit own first/middle/last name and username (student no., year, section are admin-only) |
 | `POST /api/student/profile/password/` | student | change own password (current + new; Django validators; rate-limited) |

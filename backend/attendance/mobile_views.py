@@ -5,6 +5,7 @@ Student endpoints are strictly scoped to ``request.user``'s own record.
 """
 
 import datetime
+import hashlib
 from decimal import Decimal
 
 from django.db.models import Sum
@@ -27,6 +28,7 @@ from .mobile_serializers import (
     QRGenerateSerializer,
     ScanRequestSerializer,
     ScanResultSerializer,
+    ScanSyncSerializer,
     StudentAttendanceSerializer,
     StudentFineSerializer,
     StudentPasswordChangeSerializer,
@@ -191,86 +193,194 @@ class InstructorScanView(APIView):
     def post(self, request):
         in_ser = ScanRequestSerializer(data=request.data)
         in_ser.is_valid(raise_exception=True)
-        token = in_ser.validated_data["token"]
+        instructor = Instructor.objects.filter(user=request.user).first()
+        http_status, body = record_scan(
+            in_ser.validated_data["token"], instructor, request=request)
+        return Response(body, status=http_status)
+
+
+#: How far a phone's clock may run ahead of the server before its offline scan is refused.
+OFFLINE_CLOCK_SKEW = datetime.timedelta(minutes=5)
+#: Offline scans older than this are refused when they finally sync.
+OFFLINE_MAX_AGE = datetime.timedelta(days=7)
+
+
+def record_scan(token, instructor, *, scanned_at=None, request=None):
+    """Validate one scanned QR token and record attendance: ``(http_status, body)``.
+
+    ``scanned_at`` is when the code was scanned; ``None`` means now (a live scan).
+    Scans queued offline replay later with the phone's scan time, so the day and
+    slot are judged at that moment, not at sync time - exactly as if the phone
+    had been online. A late scan also lowers a fine that was already computed,
+    because fines are recomputed from the logs.
+    """
+    server_now = timezone.now()
+    if scanned_at is None:
+        scanned_at = server_now
+    elif scanned_at > server_now + OFFLINE_CLOCK_SKEW:
+        return _scan_error(
+            "The scan time is in the future. Check the phone's date and time.",
+            "BAD_SCAN_TIME", 400)
+    elif scanned_at < server_now - OFFLINE_MAX_AGE:
+        return _scan_error(
+            "This offline scan is too old to be accepted.", "OFFLINE_TOO_OLD", 400)
+    now = timezone.localtime(scanned_at)
+    today = now.date()
+
+    qr = (
+        QRCode.objects.select_related("student__user", "event")
+        .filter(token=token)
+        .first()
+    )
+    if qr is None:
+        return _scan_error("Invalid QR code — no matching record.", "INVALID_TOKEN", 404)
+
+    event = qr.event
+    if not event.is_active:
+        return _scan_error("This event is not active.", "EVENT_INACTIVE", 400)
+    if not (event.start_date <= today <= event.end_date):
+        return _scan_error("This event is not running today.", "EVENT_NOT_TODAY", 400)
+    if qr.date != today:
+        return _scan_error(
+            f"This QR code is dated {qr.date}, not today ({today}).",
+            "STALE_QR", 400,
+        )
+
+    # Decide the slot from the scan time against the event's windows.
+    slot = event.slot_for_time(now.time())
+    if slot is None:
+        return _scan_error(
+            "No attendance slot is open right now. Scanning is only allowed "
+            "during the scheduled time windows.",
+            "OUTSIDE_WINDOW", 400,
+        )
+
+    log = AttendanceLog.objects.filter(
+        student=qr.student, event=event, date=qr.date, attendance_type=slot,
+    ).first()
+
+    # Already counted as attended → friendly response, not an error.
+    if log and log.is_credited:
+        return _scan_result(
+            log, created=False,
+            detail="Attendance was already recorded for this slot.",
+            http_status=200, request=request,
+        )
+
+    # In-window scan = PRESENT (the scan time is stored; outside the window is simply absent).
+    if log is None:
+        log = AttendanceLog(
+            student=qr.student, event=event, date=qr.date, attendance_type=slot,
+        )
+    log.status = AttendanceLog.Status.PRESENT
+    log.scanned_at = scanned_at
+    log.scanned_by = instructor
+    log.save()
+
+    return _scan_result(
+        log, created=True, detail="Attendance recorded.", http_status=201,
+        request=request,
+    )
+
+
+def _scan_result(log, *, created, detail, http_status, request=None):
+    user = log.student.user
+    payload = {
+        "created": created,
+        "detail": detail,
+        "student_name": user.get_full_name() or user.username,
+        "student_number": log.student.student_number,
+        "student_photo": user.get_profile_image_url("medium", request=request),
+        "event_name": log.event.name,
+        "attendance_type": log.attendance_type,
+        "attendance_type_display": log.get_attendance_type_display(),
+        "date": log.date,
+        "status": log.status,
+        "scanned_at": log.scanned_at,
+    }
+    return http_status, ScanResultSerializer(payload).data
+
+
+def _scan_error(detail, code, http_status):
+    return http_status, {"detail": detail, "code": code}
+
+
+def token_hash(token):
+    """SHA-256 hex digest of a QR token - how the offline pack names a code."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+class InstructorOfflinePackView(APIView):
+    """``GET /api/instructor/offline-pack/`` - what the app needs to scan with no signal.
+
+    Today's scannable events (with their slot windows) and every QR code the
+    students have generated for them today, so the phone can name the student
+    and pick the slot while offline. Codes are sent as SHA-256 hashes, never as
+    raw tokens: the phone hashes what it scans and looks it up, so a copied pack
+    can't be turned back into working QR codes. ``credited`` lists the slots
+    already recorded; ``server_time`` lets the app correct a wrong phone clock.
+    """
+
+    permission_classes = [IsInstructor]
+
+    def get(self, request):
         now = timezone.localtime()
         today = now.date()
-
-        qr = (
-            QRCode.objects.select_related("student__user", "event")
-            .filter(token=token)
-            .first()
+        events = list(
+            Event.objects.select_related("semester__school_year")
+            .filter(is_active=True, start_date__lte=today, end_date__gte=today)
+            .order_by("start_date", "name")
         )
-        if qr is None:
-            return self._error("Invalid QR code — no matching record.", "INVALID_TOKEN", 404)
+        credited = {}
+        for student_id, event_id, slot in AttendanceLog.objects.filter(
+            event__in=events, date=today, status__in=services.CREDITED,
+        ).values_list("student_id", "event_id", "attendance_type"):
+            credited.setdefault((student_id, event_id), []).append(slot)
 
-        event = qr.event
-        if not event.is_active:
-            return self._error("This event is not active.", "EVENT_INACTIVE", 400)
-        if not (event.start_date <= today <= event.end_date):
-            return self._error("This event is not running today.", "EVENT_NOT_TODAY", 400)
-        if qr.date != today:
-            return self._error(
-                f"This QR code is dated {qr.date}, not today ({today}).",
-                "STALE_QR", 400,
-            )
+        codes = [
+            {
+                "hash": token_hash(qr.token),
+                "event": qr.event_id,
+                "student_name": qr.student.user.get_full_name() or qr.student.user.username,
+                "student_number": qr.student.student_number,
+                "credited": credited.get((qr.student_id, qr.event_id), []),
+            }
+            for qr in QRCode.objects.filter(event__in=events, date=today)
+            .select_related("student__user")
+        ]
+        return Response({
+            "server_time": now.isoformat(),
+            "date": today,
+            "events": EventSerializer(events, many=True).data,
+            "codes": codes,
+        })
 
-        # Decide the slot from the current time against the event's windows.
-        slot = event.slot_for_time(now.time())
-        if slot is None:
-            return self._error(
-                "No attendance slot is open right now. Scanning is only allowed "
-                "during the scheduled time windows.",
-                "OUTSIDE_WINDOW", 400,
-            )
 
-        log = AttendanceLog.objects.filter(
-            student=qr.student, event=event, date=qr.date, attendance_type=slot,
-        ).first()
+class InstructorScanSyncView(APIView):
+    """``POST /api/instructor/scans/sync/`` - upload the scans queued while offline.
 
-        # Already counted as attended → friendly response, not an error.
-        if log and log.is_credited:
-            return self._result(
-                log, created=False,
-                detail="Attendance was already recorded for this slot.",
-                http_status=200, request=request,
-            )
+    Body: ``{"scans": [{"token": ..., "scanned_at": ISO-8601}, ...]}`` (max 500).
+    Each scan is judged like a live one at its own ``scanned_at`` (see
+    :func:`record_scan`). One result per scan comes back, in order: the live
+    endpoint's body plus ``http_status``, so the app can tell which were
+    recorded, already recorded, or rejected.
+    """
 
-        # In-window scan = PRESENT (the scan time is stored; outside the window is simply absent).
+    permission_classes = [IsInstructor]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "scan_sync"
+
+    @extend_schema(request=ScanSyncSerializer)
+    def post(self, request):
+        in_ser = ScanSyncSerializer(data=request.data)
+        in_ser.is_valid(raise_exception=True)
         instructor = Instructor.objects.filter(user=request.user).first()
-        if log is None:
-            log = AttendanceLog(
-                student=qr.student, event=event, date=qr.date, attendance_type=slot,
-            )
-        log.status = AttendanceLog.Status.PRESENT
-        log.scanned_at = timezone.now()
-        log.scanned_by = instructor
-        log.save()
-
-        return self._result(
-            log, created=True, detail="Attendance recorded.", http_status=201,
-            request=request,
-        )
-
-    # -- helpers ------------------------------------------------------------
-    def _result(self, log, *, created, detail, http_status, request=None):
-        user = log.student.user
-        payload = {
-            "created": created,
-            "detail": detail,
-            "student_name": user.get_full_name() or user.username,
-            "student_number": log.student.student_number,
-            "student_photo": user.get_profile_image_url("medium", request=request),
-            "event_name": log.event.name,
-            "attendance_type": log.attendance_type,
-            "attendance_type_display": log.get_attendance_type_display(),
-            "date": log.date,
-            "status": log.status,
-            "scanned_at": log.scanned_at,
-        }
-        return Response(ScanResultSerializer(payload).data, status=http_status)
-
-    def _error(self, detail, code, http_status):
-        return Response({"detail": detail, "code": code}, status=http_status)
+        results = []
+        for item in in_ser.validated_data["scans"]:
+            http_status, body = record_scan(
+                item["token"], instructor, scanned_at=item["scanned_at"], request=request)
+            results.append({"http_status": http_status, **body})
+        return Response({"results": results})
 
 
 class InstructorScansView(generics.ListAPIView):
