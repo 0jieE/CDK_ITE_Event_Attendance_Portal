@@ -11,6 +11,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from accounts.permissions import IsAdmin
@@ -35,7 +36,26 @@ from .serializers import (
 )
 
 
-class SchoolYearViewSet(viewsets.ModelViewSet):
+class _LockedWhenUsedMixin:
+    """Once events exist under a school year / semester only the Super Admin may change or
+    delete it (renaming or removing it would silently affect those events and their fines)."""
+
+    def _guard(self):
+        if not self.request.user.is_superuser and self.get_object().has_events:
+            raise PermissionDenied(
+                "Events already exist under this record - only the Super Admin can change or delete it."
+            )
+
+    def update(self, request, *args, **kwargs):      # PUT and PATCH
+        self._guard()
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        self._guard()
+        return super().destroy(request, *args, **kwargs)
+
+
+class SchoolYearViewSet(_LockedWhenUsedMixin, viewsets.ModelViewSet):
     """CRUD for school years."""
 
     queryset = SchoolYear.objects.all()
@@ -46,7 +66,7 @@ class SchoolYearViewSet(viewsets.ModelViewSet):
     ordering_fields = ["sy"]
 
 
-class SemesterViewSet(viewsets.ModelViewSet):
+class SemesterViewSet(_LockedWhenUsedMixin, viewsets.ModelViewSet):
     """CRUD for semesters; filterable by school_year."""
 
     queryset = Semester.objects.select_related("school_year").all()

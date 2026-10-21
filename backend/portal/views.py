@@ -152,17 +152,50 @@ class StudentsSection(_LinkedUserSection):
 
 @admin_required
 def terms_view(request):
-    """School years and their semesters in a single table (two Add buttons on top)."""
+    """School years and their semesters in a single table (two Add buttons on top).
+
+    Once events exist under a school year / semester it is *locked*: only the Super Admin
+    sees its Edit / Delete buttons.
+    """
+    school_years = list(SchoolYear.objects.prefetch_related("semesters__events").order_by("-sy"))
+    for sy in school_years:
+        sy.sem_list = list(sy.semesters.all())
+        for sem in sy.sem_list:
+            sem.event_count = len(sem.events.all())
+            sem.locked = sem.event_count > 0
+        sy.locked = any(sem.locked for sem in sy.sem_list)
     context = {
         "active": "terms",
-        "school_years": SchoolYear.objects.prefetch_related("semesters__events").order_by("-sy"),
+        "school_years": school_years,
+        "is_super": request.user.is_superuser,
     }
     if is_htmx(request) and request.GET.get("partial") == "table":
         return render(request, "portal/terms/partials/table.html", context)
     return render(request, "portal/terms/list.html", context)
 
 
-class SchoolYearsSection(CrudSection):
+class _LockedWhenUsedSection(CrudSection):
+    """Edit/delete are refused for non-Super-Admins once events exist (see terms_view)."""
+
+    def _locked_response(self, request, pk):
+        if request.user.is_superuser:
+            return None
+        obj = get_object_or_404(self.get_queryset(request), pk=pk)
+        if not obj.has_events:
+            return None
+        return htmx_action_response(
+            toast=f"{self.singular} “{obj}” already has events - only the Super Admin can change or delete it.",
+            level="error", refresh_event=self.refresh_event, close_modal=True,
+        )
+
+    def update_view(self, request, pk):
+        return self._locked_response(request, pk) or super().update_view(request, pk)
+
+    def delete_view(self, request, pk):
+        return self._locked_response(request, pk) or super().delete_view(request, pk)
+
+
+class SchoolYearsSection(_LockedWhenUsedSection):
     section = "school_years"
     title = "School Years"
     singular = "School Year"
@@ -175,7 +208,7 @@ class SchoolYearsSection(CrudSection):
         return terms_view(request)       # one combined page; only add/edit/delete live here
 
 
-class SemestersSection(CrudSection):
+class SemestersSection(_LockedWhenUsedSection):
     section = "semesters"
     title = "Semesters"
     singular = "Semester"

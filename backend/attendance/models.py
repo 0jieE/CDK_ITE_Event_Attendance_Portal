@@ -51,6 +51,11 @@ class SchoolYear(models.Model):
     def __str__(self):
         return self.sy
 
+    @property
+    def has_events(self):
+        """True once any event exists under this school year (it is then locked for advisers)."""
+        return Event.objects.filter(semester__school_year=self).exists()
+
 
 class Semester(models.Model):
     """A semester within a school year (1st / 2nd / Summer)."""
@@ -71,6 +76,11 @@ class Semester(models.Model):
 
     def __str__(self):
         return f"{self.school_year.sy} {self.name}"
+
+    @property
+    def has_events(self):
+        """True once an event exists under this semester (it is then locked for advisers)."""
+        return self.events.exists()
 
 
 class Event(models.Model):

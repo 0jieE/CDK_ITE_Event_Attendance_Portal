@@ -182,3 +182,82 @@ class TermsPageTests(TestCase):
         r = self.client.post(reverse("portal:semesters-add"), {"school_year": sy.pk, "name": "2nd"}, HTTP_HX_REQUEST="true")
         self.assertEqual(r.status_code, 204, r.content[:200])
         self.assertEqual(sy.semesters.count(), 1)
+
+
+class TermsLockedWhenUsedTests(TestCase):
+    """Once an event exists, only the Super Admin can edit/delete its school year / semester."""
+
+    def setUp(self):
+        from attendance.models import SchoolYear, Semester
+        from attendance.tests import make_event
+
+        self.adv = User.objects.create_user("adviser", password="pw-12345-x", is_admin=True)
+        self.boss = User.objects.create_user("boss", password="pw-12345-x", is_admin=True,
+                                             is_superuser=True, is_staff=True)
+        self.event = make_event()                       # creates 2025-2026 / 1st with one event
+        self.sem = self.event.semester
+        self.sy = self.sem.school_year
+        self.free_sy = SchoolYear.objects.create(sy="2099-2100")
+        self.free_sem = Semester.objects.create(school_year=self.free_sy, name="2nd")
+
+    def _urls(self):
+        return {
+            "sem_edit": reverse("portal:semesters-edit", args=[self.sem.pk]),
+            "sem_del": reverse("portal:semesters-delete", args=[self.sem.pk]),
+            "sy_edit": reverse("portal:school_years-edit", args=[self.sy.pk]),
+            "sy_del": reverse("portal:school_years-delete", args=[self.sy.pk]),
+        }
+
+    def test_buttons_hidden_for_adviser_but_shown_for_super_admin(self):
+        u = self._urls()
+        self.client.force_login(self.adv)
+        html = self.client.get(reverse("portal:terms-list")).content.decode()
+        for key in u.values():
+            self.assertNotIn(key, html)
+        self.assertIn("Locked", html)
+        # a school year / semester without events stays editable
+        self.assertIn(reverse("portal:semesters-edit", args=[self.free_sem.pk]), html)
+        self.assertIn(reverse("portal:school_years-edit", args=[self.free_sy.pk]), html)
+        self.client.force_login(self.boss)
+        html = self.client.get(reverse("portal:terms-list")).content.decode()
+        for key in u.values():
+            self.assertIn(key, html)
+
+    def test_adviser_is_refused_server_side(self):
+        from attendance.models import SchoolYear, Semester
+
+        u = self._urls()
+        self.client.force_login(self.adv)
+        for name in ("sem_edit", "sy_edit"):
+            r = self.client.get(u[name], HTTP_HX_REQUEST="true")
+            self.assertEqual(r.status_code, 204)
+            self.assertIn("Super Admin", r["HX-Trigger"])
+        self.client.post(u["sem_del"], HTTP_HX_REQUEST="true")
+        self.client.post(u["sy_del"], HTTP_HX_REQUEST="true")
+        self.client.post(u["sy_edit"], {"sy": "1999-2000"}, HTTP_HX_REQUEST="true")
+        self.assertTrue(Semester.objects.filter(pk=self.sem.pk).exists())
+        self.assertEqual(SchoolYear.objects.get(pk=self.sy.pk).sy, "2025-2026")
+        # unlocked records can still be deleted by the adviser
+        self.assertEqual(self.client.post(reverse("portal:semesters-delete", args=[self.free_sem.pk]),
+                                          HTTP_HX_REQUEST="true").status_code, 204)
+        self.assertFalse(Semester.objects.filter(pk=self.free_sem.pk).exists())
+
+    def test_api_blocks_adviser_but_not_super_admin(self):
+        from rest_framework.test import APIClient
+
+        api = APIClient()
+        api.force_authenticate(self.adv)
+        self.assertEqual(api.patch(f"/api/school-years/{self.sy.pk}/", {"sy": "1999-2000"}, format="json").status_code, 403)
+        self.assertEqual(api.delete(f"/api/semesters/{self.sem.pk}/").status_code, 403)
+        self.assertEqual(api.delete(f"/api/semesters/{self.free_sem.pk}/").status_code, 204)
+        sup = APIClient()
+        sup.force_authenticate(self.boss)
+        self.assertEqual(sup.patch(f"/api/school-years/{self.sy.pk}/", {"sy": "1999-2000"}, format="json").status_code, 200)
+
+    def test_super_admin_can_still_delete_through_the_portal(self):
+        from attendance.models import Semester
+
+        self.client.force_login(self.boss)
+        r = self.client.post(self._urls()["sem_del"], HTTP_HX_REQUEST="true")
+        self.assertEqual(r.status_code, 204)
+        self.assertFalse(Semester.objects.filter(pk=self.sem.pk).exists())
