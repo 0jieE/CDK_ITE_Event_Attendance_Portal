@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/student_profile.dart';
 import '../models/user.dart';
+import '../utils/errors.dart';
 import 'api_service.dart';
 
 enum AuthStatus { unknown, unauthenticated, authenticated }
@@ -25,7 +26,11 @@ class AuthProvider extends ChangeNotifier {
   String? get error => _error;
   bool get busy => _busy;
 
+  static const _kUser = 'auth:user';
+
   /// On launch: if we have a token, validate it via /me/; else go to login.
+  /// With no connection the last signed-in user is used, so the app still
+  /// opens offline (the server re-checks the session on the next request).
   Future<void> bootstrap() async {
     if (!await api.hasToken) {
       _set(status: AuthStatus.unauthenticated);
@@ -33,10 +38,33 @@ class AuthProvider extends ChangeNotifier {
     }
     try {
       _user = await api.fetchMe();
+      await _cacheUser();
       _set(status: AuthStatus.authenticated);
-    } catch (_) {
-      await api.logout();
+    } catch (e) {
+      final cached = isNetworkError(e) ? await _cachedUser() : null;
+      if (cached != null) {
+        _user = cached;
+        _set(status: AuthStatus.authenticated);
+        return;
+      }
+      // Offline with nothing cached: keep the tokens, just ask to sign in.
+      if (!isNetworkError(e)) await api.logout();
       _set(status: AuthStatus.unauthenticated);
+    }
+  }
+
+  Future<void> _cacheUser() async {
+    final user = _user;
+    if (user != null) await api.cache.writeJson(_kUser, user.toJson());
+  }
+
+  Future<User?> _cachedUser() async {
+    final json = await api.cache.readJson(_kUser);
+    if (json is! Map) return null;
+    try {
+      return User.fromJson(Map<String, dynamic>.from(json));
+    } catch (_) {
+      return null;
     }
   }
 
@@ -45,6 +73,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       await api.login(username.trim(), password);
       _user = await api.fetchMe();
+      await _cacheUser();
       _set(status: AuthStatus.authenticated, busy: false);
       return true;
     } on ApiException catch (e) {
@@ -64,6 +93,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> logout() async {
     await api.logout();
+    await api.cache.remove(_kUser);
     _user = null;
     _set(status: AuthStatus.unauthenticated, error: null);
   }
@@ -79,6 +109,7 @@ class AuthProvider extends ChangeNotifier {
       profileImage: profile.profileImage,
       clearPhoto: profile.profileImage == null,
     );
+    _cacheUser();
     notifyListeners();
   }
 
@@ -87,11 +118,13 @@ class AuthProvider extends ChangeNotifier {
     final current = _user;
     if (current == null) return;
     _user = current.copyWith(profileImage: url, clearPhoto: url == null);
+    _cacheUser();
     notifyListeners();
   }
 
   void _handleSessionExpired() {
     _user = null;
+    api.cache.remove(_kUser);
     _set(status: AuthStatus.unauthenticated);
   }
 

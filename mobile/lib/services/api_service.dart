@@ -9,11 +9,13 @@ import '../models/attendance_log.dart';
 import '../models/event.dart';
 import '../models/event_attendance.dart';
 import '../models/fine.dart';
+import '../models/offline_pack.dart';
 import '../models/qr_slot.dart';
 import '../models/student_profile.dart';
 import '../models/user.dart';
 import '../utils/image_type.dart';
 import '../utils/manila_time.dart' show apiDate;
+import 'local_cache.dart';
 import 'token_storage.dart';
 
 /// Raised for non-2xx responses; carries the parsed body so callers can read
@@ -47,12 +49,16 @@ class ApiService {
   final TokenStorage _tokens;
   final http.Client _client;
 
+  /// On-phone store for what the app shows while offline.
+  final LocalCache cache;
+
   /// Called when the session is irrecoverably expired (drives logout/redirect).
   void Function()? onUnauthorized;
 
-  ApiService({TokenStorage? tokens, http.Client? client})
+  ApiService({TokenStorage? tokens, http.Client? client, LocalCache? cache})
       : _tokens = tokens ?? TokenStorage(),
-        _client = client ?? http.Client();
+        _client = client ?? http.Client(),
+        cache = cache ?? const LocalCache();
 
   TokenStorage get tokens => _tokens;
   Future<bool> get hasToken => _tokens.hasTokens;
@@ -175,6 +181,28 @@ class ApiService {
     } on ApiException catch (e) {
       return ScanResult.failure(e.message, e.code);
     }
+  }
+
+  /// Today's events + today's student QR codes (hashed) for scanning offline.
+  /// [receivedAt] (default: now) is the phone time the reply arrived, used to
+  /// measure the phone's clock error.
+  Future<OfflinePack> instructorOfflinePack({DateTime? receivedAt}) async {
+    final data = await getJson('/instructor/offline-pack/');
+    return OfflinePack.fromJson(
+        data as Map<String, dynamic>, receivedAt ?? DateTime.now());
+  }
+
+  /// Upload scans queued offline. One result map per scan, in order: the live
+  /// scan body plus `http_status` (201 recorded, 200 already, else rejected).
+  Future<List<Map<String, dynamic>>> syncScans(List<QueuedScan> scans) async {
+    final res = await post('/instructor/scans/sync/', body: {
+      'scans': [
+        for (final s in scans)
+          {'token': s.token, 'scanned_at': s.scannedAt.toUtc().toIso8601String()},
+      ],
+    });
+    final results = (res.data as Map<String, dynamic>)['results'] as List;
+    return results.cast<Map<String, dynamic>>();
   }
 
   Future<List<AttendanceLog>> instructorScans({int? event, String? date}) async {

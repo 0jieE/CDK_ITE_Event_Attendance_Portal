@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io' show HandshakeException, SocketException;
+
+import 'package:http/http.dart' as http;
 
 import '../services/api_service.dart';
 
@@ -13,6 +16,14 @@ String friendlyError(Object error) {
   }
   return 'Could not reach the server. Check your connection and try again.';
 }
+
+/// True when [error] means the server couldn't be reached at all (no signal,
+/// no internet, DNS/TLS failure, timeout) rather than the server saying no.
+bool isNetworkError(Object error) =>
+    error is SocketException ||
+    error is http.ClientException ||
+    error is TimeoutException ||
+    error is HandshakeException;
 
 /// Per-field server errors (`{"username": ["..."]}`) from a 400 response, with
 /// each field's messages joined. Empty when the error isn't field-shaped.

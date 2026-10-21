@@ -26,6 +26,16 @@ class QrSlot {
       imageUrl: json['image_url'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'token': token,
+        'event': event,
+        'date': '${date.year.toString().padLeft(4, '0')}-'
+            '${date.month.toString().padLeft(2, '0')}-'
+            '${date.day.toString().padLeft(2, '0')}',
+        'image_url': imageUrl,
+      };
 }
 
 /// Result of an instructor scan (`POST /api/instructor/scan/`).
@@ -42,6 +52,13 @@ class ScanResult {
   final String? status;
   final DateTime? scannedAt;
 
+  /// Saved on the phone (no connection); it is sent to the server later.
+  final bool offline;
+
+  /// Offline and the code wasn't in the downloaded list, so the student is
+  /// unknown until it syncs (the QR may still turn out to be invalid).
+  final bool unverified;
+
   const ScanResult({
     required this.ok,
     required this.created,
@@ -54,6 +71,8 @@ class ScanResult {
     this.attendanceTypeDisplay,
     this.status,
     this.scannedAt,
+    this.offline = false,
+    this.unverified = false,
   });
 
   factory ScanResult.success(Map<String, dynamic> json, {required bool created}) {
@@ -73,7 +92,9 @@ class ScanResult {
     );
   }
 
-  factory ScanResult.failure(String detail, String? code) {
-    return ScanResult(ok: false, created: false, detail: detail, code: code);
+  factory ScanResult.failure(String detail, String? code,
+      {bool offline = false}) {
+    return ScanResult(
+        ok: false, created: false, detail: detail, code: code, offline: offline);
   }
 }

@@ -40,7 +40,10 @@ class _AsyncListViewState<T> extends State<AsyncListView<T>> {
 
   Future<void> _refresh() async {
     final f = widget.loader();
-    setState(() => _future = f);
+    // Block body: an arrow would return the Future, which setState rejects.
+    setState(() {
+      _future = f;
+    });
     try {
       await f;
     } catch (_) {/* surfaced by the FutureBuilder */}

@@ -7,6 +7,8 @@ import 'screens/login_screen.dart';
 import 'screens/student/student_home.dart';
 import 'services/api_service.dart';
 import 'services/auth_provider.dart';
+import 'services/connectivity_service.dart';
+import 'services/offline_scan_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/logout_action.dart';
 import 'widgets/state_message.dart';
@@ -26,6 +28,22 @@ class IteAttendanceApp extends StatelessWidget {
         // Expose the authenticated HTTP client to screens.
         ProxyProvider<AuthProvider, ApiService>(
           update: (_, auth, _) => auth.api,
+        ),
+        ChangeNotifierProvider(create: (_) => ConnectivityService()),
+        // Offline scanning queue, switched to whichever instructor signs in.
+        ChangeNotifierProxyProvider2<AuthProvider, ConnectivityService,
+            OfflineScanService>(
+          create: (ctx) => OfflineScanService(
+            api: ctx.read<AuthProvider>().api,
+            connectivity: ctx.read<ConnectivityService>(),
+          ),
+          update: (_, auth, _, offline) {
+            final user = auth.user;
+            final id = user != null && user.isInstructor ? user.id : null;
+            // After this build: attach() notifies listeners.
+            Future.microtask(() => offline!.attach(id));
+            return offline!;
+          },
         ),
       ],
       child: MaterialApp(
@@ -75,7 +93,14 @@ class _SplashScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.qr_code_2, size: 72, color: AppTheme.onGreen),
+            CircleAvatar(
+              radius: 64,
+              backgroundColor: Colors.white,
+              child: Padding(
+                padding: EdgeInsets.all(4),
+                child: Image(image: AssetImage('assets/icon/ite_logo.png')),
+              ),
+            ),
             SizedBox(height: 20),
             CircularProgressIndicator(color: AppTheme.onGreen),
           ],

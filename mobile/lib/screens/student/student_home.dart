@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../widgets/logout_action.dart';
+import '../../widgets/offline_banner.dart';
 import 'dashboard_tab.dart';
 import 'fines_tab.dart';
 import 'generate_qr_tab.dart';
@@ -34,7 +35,15 @@ class _StudentHomeState extends State<StudentHome> {
         title: Text(_titles[_index]),
         actions: const [LogoutAction()],
       ),
-      body: IndexedStack(index: _index, children: _tabs),
+      body: Column(
+        children: [
+          const OfflineBanner(
+            message: "You're offline. A QR you already generated today still "
+                'works; new QR codes need a connection.',
+          ),
+          Expanded(child: IndexedStack(index: _index, children: _tabs)),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),

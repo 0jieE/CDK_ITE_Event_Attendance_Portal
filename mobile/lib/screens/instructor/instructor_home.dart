@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../widgets/logout_action.dart';
+import '../../widgets/offline_banner.dart';
 import 'attendance_tab.dart';
 import 'scan_tab.dart';
 
@@ -29,11 +30,24 @@ class _InstructorHomeState extends State<InstructorHome> {
         title: Text(_titles[_index]),
         actions: const [LogoutAction()],
       ),
-      body: IndexedStack(
-        index: _index,
+      body: Column(
         children: [
-          const ScanTab(),
-          if (_visited.contains(1)) const AttendanceTab() else const SizedBox(),
+          const OfflineBanner(
+            message: "You're offline. You can still scan: scans are saved on "
+                'this phone and sync automatically.',
+          ),
+          Expanded(
+            child: IndexedStack(
+              index: _index,
+              children: [
+                const ScanTab(),
+                if (_visited.contains(1))
+                  const AttendanceTab()
+                else
+                  const SizedBox(),
+              ],
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(

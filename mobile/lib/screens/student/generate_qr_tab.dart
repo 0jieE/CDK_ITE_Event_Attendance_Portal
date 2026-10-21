@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../../models/event.dart';
 import '../../models/qr_slot.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_provider.dart';
+import '../../services/connectivity_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/errors.dart';
 import '../../utils/event_dates.dart';
@@ -19,6 +21,10 @@ import 'qr_display_screen.dart';
 /// when today's QR already exists it is shown inline (with a "Show full
 /// screen" button) and the Generate button is hidden. The server is the
 /// authority on all of this; the UI just guides.
+///
+/// Offline: generating needs the server, so it is disabled, but the events
+/// and today's QR are kept on the phone - a QR generated earlier today still
+/// shows (the instructor can scan it offline too).
 class GenerateQrTab extends StatefulWidget {
   const GenerateQrTab({super.key});
 
@@ -44,6 +50,18 @@ class _GenerateQrTabState extends State<GenerateQrTab>
   bool _busy = false;
   String? _genError;
 
+  /// The last request failed for lack of a connection.
+  bool _offline = false;
+
+  /// [_qr] came from the phone's cache, not the server.
+  bool _fromCache = false;
+
+  ConnectivityService? _connectivity;
+  bool _wasOnline = true;
+
+  static const _offlineMessage =
+      "You're offline. Connect to the internet to generate your QR.";
+
   /// Guards against a slow response for an older selection overwriting a
   /// newer one.
   int _seq = 0;
@@ -56,9 +74,74 @@ class _GenerateQrTabState extends State<GenerateQrTab>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final c = context.read<ConnectivityService?>();
+    if (c != _connectivity) {
+      _connectivity?.removeListener(_onConnectivity);
+      _connectivity = c?..addListener(_onConnectivity);
+      _wasOnline = c?.isOnline ?? true;
+    }
+  }
+
+  @override
   void dispose() {
+    _connectivity?.removeListener(_onConnectivity);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  /// Back online after an offline load: refresh quietly.
+  void _onConnectivity() {
+    final online = _connectivity?.isOnline ?? true;
+    if (online && !_wasOnline && mounted) {
+      if (_events == null) {
+        _loadEvents();
+      } else {
+        _loadEvents(silent: true);
+      }
+    }
+    if (mounted) setState(() => _wasOnline = online);
+  }
+
+  // -- offline cache (per student) ------------------------------------------
+  String get _cachePrefix =>
+      'student:${context.read<AuthProvider?>()?.user?.id ?? 0}';
+
+  Future<void> _cacheEvents(List<Event> events) =>
+      context.read<ApiService>().cache.writeJson(
+          '$_cachePrefix:events', [for (final e in events) e.toJson()]);
+
+  Future<List<Event>> _cachedEvents() async {
+    final json =
+        await context.read<ApiService>().cache.readJson('$_cachePrefix:events');
+    if (json is! List) return const [];
+    try {
+      return [
+        for (final e in json) Event.fromJson(Map<String, dynamic>.from(e as Map)),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  String _qrKey(int event, DateTime date) =>
+      '$_cachePrefix:qr:$event:${apiDate(date)}';
+
+  Future<void> _cacheQr(QrSlot qr) => context
+      .read<ApiService>()
+      .cache
+      .writeJson(_qrKey(qr.event, qr.date), qr.toJson());
+
+  Future<QrSlot?> _cachedQr(int event, DateTime date) async {
+    final json =
+        await context.read<ApiService>().cache.readJson(_qrKey(event, date));
+    if (json is! Map) return null;
+    try {
+      return QrSlot.fromJson(Map<String, dynamic>.from(json));
+    } catch (_) {
+      return null;
+    }
   }
 
   /// The app may sit in the background past midnight: re-evaluate "today" (and
@@ -80,7 +163,18 @@ class _GenerateQrTabState extends State<GenerateQrTab>
       });
     }
     try {
-      final events = await context.read<ApiService>().studentEvents();
+      List<Event> events;
+      try {
+        events = await context.read<ApiService>().studentEvents();
+        _offline = false;
+        if (mounted) _cacheEvents(events);
+      } catch (e) {
+        if (!isNetworkError(e) || !mounted) rethrow;
+        // Offline: use the events saved on the phone, if any.
+        events = await _cachedEvents();
+        if (events.isEmpty) rethrow;
+        _offline = true;
+      }
       if (!mounted) return;
       setState(() {
         _events = events;
@@ -105,7 +199,10 @@ class _GenerateQrTabState extends State<GenerateQrTab>
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _eventsError = friendlyError(e);
+        _eventsError = isNetworkError(e)
+            ? "You're offline and no events are saved on this phone yet. "
+                'Connect to the internet and try again.'
+            : friendlyError(e);
         _loadingEvents = false;
       });
     }
@@ -119,6 +216,7 @@ class _GenerateQrTabState extends State<GenerateQrTab>
       _today = today;
       _date = day;
       _qr = null;
+      _fromCache = false;
       _checkError = null;
       _genError = null;
       _checking = false;
@@ -142,14 +240,30 @@ class _GenerateQrTabState extends State<GenerateQrTab>
             date: apiDate(date),
           );
       if (!mounted || seq != _seq) return;
+      final qr = list.where((q) => q.event == event.id).firstOrNull;
+      if (qr != null) _cacheQr(qr);
       setState(() {
-        _qr = list.where((q) => q.event == event.id).firstOrNull;
+        _qr = qr;
+        _fromCache = false;
+        _offline = false;
         _checking = false;
       });
     } on SessionExpired {
       return; // the router is already sending the user to the login screen
     } catch (e) {
       if (!mounted || seq != _seq) return;
+      if (isNetworkError(e)) {
+        // Offline: today's QR from the phone, if it was generated here.
+        final cached = await _cachedQr(event.id, date);
+        if (!mounted || seq != _seq) return;
+        setState(() {
+          _qr = cached;
+          _fromCache = cached != null;
+          _offline = true;
+          _checking = false;
+        });
+        return;
+      }
       setState(() {
         _checkError = friendlyError(e);
         _checking = false;
@@ -161,6 +275,10 @@ class _GenerateQrTabState extends State<GenerateQrTab>
     final event = _event;
     final date = _date;
     if (event == null || date == null) return;
+    if (!(_connectivity?.isOnline ?? true)) {
+      setState(() => _genError = _offlineMessage);
+      return;
+    }
     final seq = ++_seq;
     setState(() {
       _busy = true;
@@ -173,12 +291,20 @@ class _GenerateQrTabState extends State<GenerateQrTab>
             date: apiDate(date),
           );
       if (!mounted || seq != _seq) return;
-      setState(() => _qr = slot);
+      _cacheQr(slot);
+      setState(() {
+        _qr = slot;
+        _fromCache = false;
+        _offline = false;
+      });
     } on SessionExpired {
       return;
     } catch (e) {
       if (!mounted || seq != _seq) return;
-      setState(() => _genError = friendlyError(e));
+      setState(() {
+        if (isNetworkError(e)) _offline = true;
+        _genError = isNetworkError(e) ? _offlineMessage : friendlyError(e);
+      });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -358,7 +484,32 @@ class _GenerateQrTabState extends State<GenerateQrTab>
     }
     final qr = _qr;
     if (qr != null) {
-      return _QrCard(slot: qr, onFullScreen: _openFullScreen);
+      return _QrCard(
+          slot: qr, onFullScreen: _openFullScreen, savedOnPhone: _fromCache);
+    }
+    final online = _connectivity?.isOnline ?? true;
+    if (_offline || !online) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const InlineBanner(
+            isError: false,
+            icon: Icons.cloud_off,
+            message: _offlineMessage,
+          ),
+          const SizedBox(height: 12),
+          const FilledButton(
+            onPressed: null,
+            child: Text('Generate QR'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _checkExisting,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Try again'),
+          ),
+        ],
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -439,7 +590,14 @@ class _DayRow extends StatelessWidget {
 class _QrCard extends StatelessWidget {
   final QrSlot slot;
   final VoidCallback onFullScreen;
-  const _QrCard({required this.slot, required this.onFullScreen});
+
+  /// Shown from the phone's copy while offline.
+  final bool savedOnPhone;
+  const _QrCard({
+    required this.slot,
+    required this.onFullScreen,
+    this.savedOnPhone = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -490,6 +648,18 @@ class _QrCard extends StatelessWidget {
               label: const Text('Show full screen'),
             ),
             const SizedBox(height: 10),
+            if (savedOnPhone) ...[
+              Text(
+                "Offline: showing the copy saved on this phone. It still "
+                'works for scanning.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: context.brand.accent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+            ],
             Text(
               'One QR per event each day — show this one to your instructor '
               'during each slot window.',

@@ -48,10 +48,21 @@ are issued by the Department Adviser, who gives each student a username and pass
 - **Scan:** pick today's event and scan students' QR codes.
 - **Attendance:** review attendance in **every** event (finished, running, upcoming): choose a day,
   see per-slot present/absent totals and each student's status (search + Missing/Complete filters).
+- **Offline scanning:** opening the Scan tab or the scanner downloads an *offline pack* (today's
+  events and today's student QR codes, hashed). With no connection a scan is checked on the phone
+  (student name, open slot, duplicates) and saved with its scan time (corrected by the server
+  clock), shown as a blue **Saved offline** card. A QR generated after the last download is still
+  saved, as *not verified yet*. Saved scans upload automatically when the connection returns (or
+  **Sync now**); the server judges each one at its original scan time, and the Scan tab lists any
+  it rejected. The queue is per instructor and survives restarts and log-outs.
 
 ## Student features
 - **QR:** one QR per event-day. Only today's date is selectable (other days of a multi-day event are
   muted); once generated it is shown inline with a full-screen view instead of the Generate button.
+  **Offline:** generating needs a connection, but today's QR (and the event list) is kept on the
+  phone, so a QR generated earlier still shows and can be scanned.
+- **Offline start (both roles):** the app opens with the last signed-in account when there is no
+  connection, with a "You're offline" strip under the app bar.
 - **History:** filter by event (defaults to the event closest to today), grouped by date.
 - **Profile:** change photo (camera/gallery), name, username and password.
 - **Theme:** Material 3 in the ITE brand green `#41B422` (light only).

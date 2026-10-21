@@ -40,6 +40,18 @@ class User {
     );
   }
 
+  /// The `/api/me/` shape, so the user can be cached for offline start-up.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'username': username,
+        'full_name': fullName,
+        'is_admin': isAdmin,
+        'is_instructor': isInstructor,
+        'is_student': isStudent,
+        'role': role,
+        'profile_image': profileImage,
+      };
+
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id'] as int,
