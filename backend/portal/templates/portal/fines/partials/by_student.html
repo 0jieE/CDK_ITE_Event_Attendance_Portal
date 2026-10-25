@@ -109,6 +109,7 @@ Cell shows '–' when the slot isn't required, 'Pending' while open, 'Absent' wh
                 {% elif cell.kind == 'pending' %}<span class="badge text-bg-secondary">{{ cell.value }}</span>
                 {% elif cell.kind == 'absent' and cell.paid %}
                   <span class="badge text-bg-success" title="₱{{ cell.rate }} paid">Paid</span>
+                  <span class="print-only small">₱{{ cell.rate }}</span>
                   {% if cell.undo %}
                     <button class="btn btn-sm btn-link text-danger p-0 ms-1 no-print" title="Undo this payment"
                             hx-post="{% url 'portal:fines-unpay-slot' fine.id %}"
@@ -119,6 +120,7 @@ Cell shows '–' when the slot isn't required, 'Pending' while open, 'Absent' wh
                   {% endif %}
                 {% elif cell.kind == 'absent' %}
                   <span class="badge text-bg-danger">{{ cell.value }}</span>
+                  <span class="print-only small">₱{{ cell.rate }}</span>
                   {% if cell.can_pay %}
                     <button class="btn btn-sm btn-outline-success py-0 px-1 ms-1 no-print" title="Mark this slot as paid"
                             hx-post="{% url 'portal:fines-pay-slot' fine.id %}"
@@ -135,7 +137,7 @@ Cell shows '–' when the slot isn't required, 'Pending' while open, 'Absent' wh
       </tbody>
     </table>
   </div>
-  <p class="text-muted small mt-2 mb-0">
+  <p class="text-muted small mt-2 mb-0 no-print">
     <span class="badge text-bg-success">Present</span>
     <span class="badge text-bg-danger">Absent</span> = missed required slot (use <em>Pay</em> to record cash for that slot, or <em>Mark all paid</em>) ·
     <span class="badge text-bg-success">Paid</span> = missed slot already paid ·

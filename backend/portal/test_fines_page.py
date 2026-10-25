@@ -111,3 +111,13 @@ class FinesPageTests(TestCase):
         html = self.client.get(reverse("portal:attendance_logs-list"), {"tab": "student"}).content.decode()
         i = html.index('name="student"')
         self.assertIn("searchable-select", html[i - 120: i + 160])
+
+    def test_printed_grid_shows_the_rate_in_each_missed_cell_and_has_no_legend(self):
+        html = self.ledger(view="student", student=self.s1.pk, event=self.e_cur.pk)
+        self.assertIn('<span class="print-only small">₱10.00</span>', html)
+        legend = html[html.index("= missed required slot"):]
+        self.assertIn("mt-2 mb-0 no-print", html[html.index("= missed required slot") - 400: html.index("= missed required slot")])
+        services.pay_slots(Fine.objects.get(student=self.s1, event=self.e_cur), slots=None)
+        html = self.ledger(view="student", student=self.s1.pk, event=self.e_cur.pk)
+        self.assertIn('title="₱10.00 paid">Paid</span>', html)
+        self.assertIn('<span class="print-only small">₱10.00</span>', html)       # paid cells keep the rate too

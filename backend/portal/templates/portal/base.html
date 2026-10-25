@@ -125,10 +125,10 @@
     }
 
     /* ---- Printing: every table must fit the page and read well on paper ---- */
-    .print-head { display: none; }
+    .print-head, .print-only { display: none; }
     @page { size: A4; margin: 12mm; }
     @media print {
-      .sidebar, .topbar, .no-print, .sidebar-backdrop { display: none !important; }
+      .sidebar, .topbar, .no-print, .sidebar-backdrop, .toast-container { display: none !important; }
       html, body { background: #fff !important; color: #111; font-size: 10pt; }
       .content { margin-left: 0 !important; transition: none !important; }
       .portal-main { padding: 0 !important; max-width: none !important; }
@@ -157,6 +157,7 @@
       .badge { color: #111 !important; background: transparent !important; border: 1px solid #555; font-weight: 600; }
       .text-success, .text-danger, .text-muted { color: #111 !important; }
       /* printed report header: ITE logo + title (+ filters, print date) */
+      .print-only { display: inline !important; margin-left: .25rem; font-weight: 600; }
       .print-head { display: flex; align-items: center; gap: .9rem; border-bottom: 2px solid #111; padding-bottom: .6rem; margin-bottom: .9rem; color: #111; }
       .print-head img { width: 60px; height: 60px; object-fit: contain; }
       .print-head h3 { margin: 0; font-size: 1.3rem; font-weight: 700; }
