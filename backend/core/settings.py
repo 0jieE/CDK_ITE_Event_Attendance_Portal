@@ -60,7 +60,7 @@ if _render_host:
 # Applications
 # ---------------------------------------------------------------------------
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "core.apps.IteAdminConfig",        # django.contrib.admin with our branded site + backup page
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -108,7 +108,7 @@ ROOT_URLCONF = "core.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "core" / "templates"],       # admin/ overrides (branding, backup page)
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [

@@ -33,3 +33,7 @@ env_64/
 # TLS material for nginx
 nginx/certs/*
 !nginx/certs/.gitkeep
+
+# database backups (personal data + password hashes) - never commit
+ite-attendance-backup-*.json
+*.backup.json

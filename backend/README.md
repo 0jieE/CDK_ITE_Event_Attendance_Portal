@@ -246,6 +246,29 @@ docker compose --env-file .env.prod up -d --build
 
 ---
 
+## Django Administration (Super Admin) - branding, backup & restore
+
+`/admin/` is themed like the portal (ITE green, logo, "ITE Attendance · Administration") and is
+open to the **Super Admin only** (`core/admin_site.py`, templates in `core/templates/admin/`).
+
+**Backup & restore** (`/admin/backup/`, also a panel on the admin home page) exists because the free
+PostgreSQL tier can be deleted (and the free web service has no shell):
+
+* **Download backup** - one JSON file with every user (password hashes included), student,
+  instructor, school year, semester, event, attendance log, QR record, fine, slot payment and the
+  portal settings. Photos / QR images stay on Cloudinary (the file keeps their paths). Sessions and
+  JWT blacklists are not saved. Keep the file private. CLI equivalent: `python manage.py backup_db`.
+* **Restore** - upload the file, type `RESTORE`. It **replaces all current data** with the file's,
+  all-or-nothing (a bad file changes nothing) and without touching the image files. CLI:
+  `python manage.py restore_db backup.json --yes`.
+
+Recovery if the database is gone: create a new PostgreSQL, set `DATABASE_URL`, redeploy (the app
+creates the tables and the Super Admin from `SUPERADMIN_*`), sign in at `/admin/`, open
+**Backup & restore** and upload the latest file; then sign in with the Super Admin that existed when
+the backup was taken. Download a fresh backup before the demo and after big data entry.
+
+---
+
 ## Admin Web Portal (Department Adviser)
 
 A server-rendered portal (**Django Templates + HTMX + Bootstrap 5 + DataTables**)

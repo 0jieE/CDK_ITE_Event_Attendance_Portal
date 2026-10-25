@@ -266,6 +266,11 @@ Notes and caveats
 - **Hostnames are automatic.** Render's `RENDER_EXTERNAL_HOSTNAME` is added to `ALLOWED_HOSTS`
   and `CSRF_TRUSTED_ORIGINS`. For a custom domain add it to `ALLOWED_HOSTS` and
   `CSRF_TRUSTED_ORIGINS=https://your.domain` (and raise `NUM_PROXIES` if a CDN sits in front).
+- **Back up the data before the demo.** Free PostgreSQL instances are deleted when the trial ends.
+  Sign in at `/admin/` as the Super Admin and press **Download backup now** (or open **Backup &
+  restore**). To recover: create a new database, set `DATABASE_URL` in the service environment,
+  redeploy, sign in at `/admin/` and use **Restore** with the file. Keep the file private - it holds
+  personal data and password hashes. (CLI: `python manage.py backup_db` / `restore_db FILE --yes`.)
 - **Free plan sleeps** after inactivity, so the first request can take ~30-60 s. Use a paid
   instance for the defense day, or open the site a few minutes before. Free PostgreSQL
   instances can expire - check your plan before relying on it long-term.

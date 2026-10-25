@@ -21,3 +21,5 @@ nginx/certs/
 docker-compose*.yml
 Dockerfile
 *.md
+
+ite-attendance-backup-*.json

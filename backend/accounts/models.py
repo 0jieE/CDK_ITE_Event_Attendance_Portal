@@ -215,14 +215,14 @@ def _delete_profile_image(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=User)
-def _ensure_instructor_profile(sender, instance, created, update_fields=None, **kwargs):
+def _ensure_instructor_profile(sender, instance, created, update_fields=None, raw=False, **kwargs):
     """A user flagged ``is_instructor`` always has the matching Instructor profile.
 
     Without this, an instructor created on the Users page had no profile row, and
     the Instructors page then refused the username as already taken.
     """
-    if not instance.is_instructor:
-        return
+    if raw or not instance.is_instructor:
+        return                                   # raw = loading a backup: it brings its own profiles
     if update_fields is not None and "is_instructor" not in update_fields:
         return                                   # e.g. a last_login touch: nothing to do
     Instructor.objects.get_or_create(user=instance)

@@ -56,6 +56,10 @@ Related accepted trade-offs:
   Administration. It is also the only account that can open Django Administration. The
   **Department Adviser** is portal-only (`is_staff=False`) and has no way to edit, delete or reset the
   password of a Super Admin or another adviser.
+- **Backups** (`/admin/backup/`) are Super Admin only (a staff account that is not a Super Admin gets a 403).
+  The file contains personal data and password hashes, so treat it like a password list: do not commit it or
+  send it in chat. A restore only accepts our own tables, refuses a file without users, runs in one
+  transaction, and never deletes the Cloudinary images.
 - Email is not stored at all (not needed: sign-in is username + password), so there is no
   personal email data to leak.
 

@@ -1,0 +1,51 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a> &rsaquo; Backup &amp; restore
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <div class="ite-card">
+    <h3>1. Download a backup</h3>
+    <p class="ite-note">One JSON file with everything saved in the database &mdash; what a backup taken right now contains:</p>
+    <div class="ite-stats">
+      {% for label, n in counts %}<div class="ite-stat"><b>{{ n }}</b><span>{{ label }}</span></div>{% endfor %}
+    </div>
+    <p class="ite-note">
+      Photos and QR images stay on Cloudinary (the file only remembers where they are), so they survive a
+      database loss. <strong>The file contains personal data and password hashes &mdash; keep it private</strong>
+      (not in a public repository or chat).
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="download">
+      <button type="submit" class="ite-btn">&#11015; Download backup (.json)</button>
+    </form>
+  </div>
+
+  <div class="ite-card danger">
+    <h3>2. Restore a backup</h3>
+    <p class="ite-note">
+      Use this after the database was deleted: deploy against a new empty database (the app creates its tables and
+      the Super Admin automatically), sign in here, then upload the file. <strong>Restoring replaces ALL current
+      users, students, events, attendance and fines</strong> with the contents of the file. It is all-or-nothing: if
+      the file is bad, nothing changes. Afterwards sign in with the Super Admin account that existed when the backup
+      was taken.
+    </p>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="restore">
+      <p><input type="file" name="file" accept=".json,application/json" required></p>
+      <p>
+        <label for="confirm">Type <b>RESTORE</b> to confirm:</label>
+        <input type="text" id="confirm" name="confirm" autocomplete="off" required style="width:9rem">
+      </p>
+      <button type="submit" class="ite-btn danger"
+              onclick="return confirm('Replace ALL current data with this backup?');">Restore from file</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
