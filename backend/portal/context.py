@@ -8,6 +8,10 @@ disabled placeholder rather than raising ``NoReverseMatch``.
 from django.urls import NoReverseMatch, reverse
 
 # Each item: {key, label, icon, url} OR {key, label, icon, children:[...]}.
+#: The installed-app (PWA) name: home-screen label, window title, install dialog. Fixed on purpose - the
+#: editable branding title (Settings page) only changes the text inside the portal.
+APP_NAME = "ITE Adviser"
+
 _NAV = [
     {"key": "dashboard", "label": "Dashboard", "url": "portal:dashboard", "icon": "speedometer2"},
     {"key": "instructors", "label": "Instructors", "url": "portal:instructors-list", "icon": "person-badge"},
@@ -48,6 +52,7 @@ def sidebar_nav(request):
 def _ui_from(pal, *, theme, mode, brand_title, brand_subtitle, logo_url, compact):
     dark = mode == "dark"
     return {
+        "app_name": APP_NAME,
         "brand_title": brand_title,
         "brand_subtitle": brand_subtitle,
         "theme": theme,

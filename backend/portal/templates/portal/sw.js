@@ -24,7 +24,7 @@ const CDN_ASSETS = [{% for url in cdn_assets %}'{{ url|escapejs }}'{% if not for
 
 const OFFLINE_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f2a14"><title>Offline · ITE Attendance</title>
+<meta name="theme-color" content="#0f2a14"><title>Offline · {{ ui.app_name }}</title>
 <style>
   *{box-sizing:border-box} body{margin:0;min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:1.5rem;
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#0f2a14;color:#e9f7e5;text-align:center}

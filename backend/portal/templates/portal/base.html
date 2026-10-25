@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="{{ ui.primary }}">
-  <title>{% block title %}Admin Portal{% endblock %} · ITE Attendance</title>
+  <title>{% block title %}Admin Portal{% endblock %} · {{ ui.app_name }}</title>
   {% include "portal/partials/pwa_head.html" %}
   <meta name="portal-user" content="{{ request.user.pk }}">
 
@@ -573,7 +573,7 @@
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="installHelpTitle"><i class="bi bi-download me-2"></i>Install {{ ui.brand_title }}</h5>
+          <h5 class="modal-title" id="installHelpTitle"><i class="bi bi-download me-2"></i>Install {{ ui.app_name }}</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
@@ -597,7 +597,7 @@
           <details data-platform="desktop">
             <summary class="fw-semibold">Computer (Chrome / Edge)</summary>
             <ol class="mt-2 mb-0">
-              <li>Click the <strong>install</strong> icon <i class="bi bi-download"></i> at the right end of the address bar, or open the menu and choose <strong>Install ITE Attendance</strong>.</li>
+              <li>Click the <strong>install</strong> icon <i class="bi bi-download"></i> at the right end of the address bar, or open the menu and choose <strong>Install {{ ui.app_name }}</strong>.</li>
               <li>Click <strong>Install</strong>.</li>
             </ol>
           </details>

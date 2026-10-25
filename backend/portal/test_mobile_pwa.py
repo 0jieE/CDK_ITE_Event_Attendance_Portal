@@ -28,11 +28,25 @@ class ManifestTests(TestCase):
         self.assertEqual(purposes, {("192x192", "any"), ("512x512", "any"), ("512x512", "maskable")})
         self.assertGreaterEqual(len(data["shortcuts"]), 3)
 
-    def test_manifest_follows_the_portal_branding(self):
+    def test_the_installed_app_is_called_ite_adviser_whatever_the_branding_says(self):
         ps = PortalSettings.load()
-        ps.brand_title = "CdK ITE Events"
+        ps.brand_title = "CdK ITE Events"                    # the portal's own title is editable ...
         ps.save()
-        self.assertEqual(self.client.get(reverse("portal:manifest")).json()["name"], "CdK ITE Events")
+        data = self.client.get(reverse("portal:manifest")).json()
+        self.assertEqual((data["name"], data["short_name"]), ("ITE Adviser", "ITE Adviser"))   # ... the app name is not
+        for page in (reverse("portal:login"), reverse("portal:sw")):
+            self.assertIn("ITE Adviser", self.client.get(page).content.decode())
+        self.assertNotIn("ITE Attendance", self.client.get(reverse("portal:manifest")).content.decode())
+
+    def test_head_tags_title_and_install_dialog_use_the_app_name(self):
+        User.objects.create_user("adviser", password=PW, is_admin=True)
+        self.client.login(username="adviser", password=PW)
+        html = self.client.get(reverse("portal:dashboard")).content.decode()
+        self.assertIn('<meta name="application-name" content="ITE Adviser">', html)
+        self.assertIn('<meta name="apple-mobile-web-app-title" content="ITE Adviser">', html)
+        self.assertIn("· ITE Adviser</title>", html)
+        self.assertIn("Install ITE Adviser", html)
+        self.assertNotIn("ITE Attendance", html.split("<body")[0])             # nothing in <head> still says the old name
 
     def test_every_icon_exists_and_has_the_right_size(self):
         from PIL import Image

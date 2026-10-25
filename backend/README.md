@@ -308,7 +308,8 @@ The portal is designed phone-first (`portal/static/portal/css/mobile.css`, `js/m
   zoom) and every control is at least 44 px tall.
 * **Native feel** - safe-area insets (notch / home indicator), `100dvh`, no tap delay, no overscroll bounce,
   reduced-motion respected. Printing is untouched (all of this is `@media screen`).
-* **Installable app** - `GET /portal/manifest.webmanifest` (public; name/colours follow the Settings page),
+* **Installable app** - named **ITE Adviser** (home-screen label, window title, install dialog; fixed in
+  `portal.context.APP_NAME`, independent of the editable branding title) - `GET /portal/manifest.webmanifest` (public; colours follow the Settings page),
   192/512 and maskable icons, Apple touch icon, `standalone` display and home-screen shortcuts, an
   **Install app** button (account menu + phone drawer: native prompt on Chrome/Edge/Android, a how-to on
   iPhone/Safari) that hides once installed.

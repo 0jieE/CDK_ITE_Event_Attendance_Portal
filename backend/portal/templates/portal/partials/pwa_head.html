@@ -5,10 +5,10 @@ is the next step for full PWA behaviour (offline shell, push); everything here i
 <link rel="manifest" href="{% url 'portal:manifest' %}">
 <link rel="icon" type="image/png" sizes="48x48" href="{% static 'portal/pwa/favicon-48.png' %}">
 <link rel="apple-touch-icon" href="{% static 'portal/pwa/apple-touch-icon.png' %}">
-<meta name="application-name" content="ITE Attendance">
+<meta name="application-name" content="{{ ui.app_name }}">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="ITE Attendance">
+<meta name="apple-mobile-web-app-title" content="{{ ui.app_name }}">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <meta name="sw-url" content="{% url 'portal:sw' %}">

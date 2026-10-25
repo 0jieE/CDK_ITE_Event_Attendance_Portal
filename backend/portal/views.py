@@ -333,8 +333,8 @@ def manifest_view(request):
         "name": name, "url": reverse(url_name), "icons": [icon("icon-192.png", 192)]}
     data = {
         "id": home,
-        "name": ui["brand_title"] or "ITE Attendance",
-        "short_name": "ITE Attendance",
+        "name": ui["app_name"],
+        "short_name": ui["app_name"],
         "description": "Event attendance, QR scanning and fines for the ITE Department.",
         "lang": "en",
         "start_url": home + "?source=pwa",
