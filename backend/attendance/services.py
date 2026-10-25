@@ -10,13 +10,13 @@ from decimal import Decimal
 
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Count, DecimalField, Q, Sum
+from django.db.models import Count, DecimalField, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from accounts.models import Student
 
-from .models import AttendanceLog, AttendanceType, Event, Fine, FineSlotPayment
+from .models import AttendanceLog, AttendanceType, Event, Fine, FineSlotPayment, Semester
 
 logger = logging.getLogger(__name__)
 
@@ -310,39 +310,30 @@ def _outstanding(fines):
     return _money_sum(unpaid, "amount") - _money_sum(unpaid, "amount_paid")
 
 
-def _attendance_rate(log_qs):
-    """Return the credited / total ratio (0–1) over an AttendanceLog queryset."""
-    agg = log_qs.aggregate(
-        total=Count("id"),
-        credited=Count("id", filter=Q(status__in=CREDITED)),
-    )
-    total = agg["total"] or 0
-    if not total:
-        return 0.0
-    return round(agg["credited"] / total, 4)
+def build_dashboard(semester=None, all_semesters=False):
+    """Return the admin dashboard aggregates for ONE semester.
 
-
-def build_dashboard():
-    """Return the top-level admin dashboard aggregates."""
+    By default that is the active semester (``Semester.current()``); pass ``semester`` for a
+    specific one, or ``all_semesters=True`` for everything. With no active semester and no
+    explicit choice the dashboard falls back to all semesters.
+    """
     refresh_active_fines()
+    if not all_semesters and semester is None:
+        semester = Semester.current()
+    events = Event.objects.select_related("semester__school_year")
     fines = Fine.objects.all()
-    total_issued = _money_sum(fines, "amount")
-    total_collected = _money_sum(fines, "amount_paid")
-    total_outstanding = _outstanding(fines)
-
-    overall_rate = _attendance_rate(AttendanceLog.objects.all())
+    if semester is not None:
+        events = events.filter(semester=semester)
+        fines = fines.filter(event__semester=semester)
 
     per_event = []
-    for event in Event.objects.select_related("semester__school_year").all():
+    for event in events:
         ev_fines = fines.filter(event=event)
         per_event.append(
             {
                 "event_id": event.id,
                 "event_name": event.name,
                 "semester": str(event.semester),
-                "attendance_rate": _attendance_rate(
-                    AttendanceLog.objects.filter(event=event)
-                ),
                 "fines_issued": _money_sum(ev_fines, "amount"),
                 "collected": _money_sum(ev_fines, "amount_paid"),
                 "outstanding": _outstanding(ev_fines),
@@ -350,10 +341,12 @@ def build_dashboard():
         )
 
     return {
-        "total_fines_issued": total_issued,
-        "total_collected": total_collected,
-        "total_outstanding": total_outstanding,
-        "overall_attendance_rate": overall_rate,
+        "semester": str(semester) if semester is not None else None,
+        "semester_id": semester.pk if semester is not None else None,
+        "is_active_semester": bool(semester is not None and semester.is_active),
+        "total_fines_issued": _money_sum(fines, "amount"),
+        "total_collected": _money_sum(fines, "amount_paid"),
+        "total_outstanding": _outstanding(fines),
         "events": per_event,
     }
 

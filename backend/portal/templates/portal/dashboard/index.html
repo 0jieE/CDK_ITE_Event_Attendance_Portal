@@ -6,7 +6,16 @@
   <div class="page-head">
     <div>
       <h2 class="page-title">Overview</h2>
-      <div class="page-sub">Fines and attendance across all events.</div>
+      <div class="page-sub">
+        {% if data.semester %}
+          <i class="bi bi-calendar-week"></i> {{ data.semester }}
+          {% if data.is_active_semester %}<span class="badge text-bg-success ms-1">Active semester</span>{% endif %}
+          &middot; fines of this semester's events.
+        {% else %}
+          No active semester is set, so this shows all semesters &mdash;
+          <a href="{% url 'portal:terms-list' %}">set one</a>.
+        {% endif %}
+      </div>
     </div>
     <div class="page-actions no-print">
       <a href="{% url 'portal:fines-list' %}" class="btn btn-outline-primary btn-sm"><i class="bi bi-cash-coin"></i> Fines</a>
@@ -16,7 +25,7 @@
 
   <!-- Summary cards -->
   <div class="row g-3 mb-4">
-    <div class="col-12 col-sm-6 col-xl-3">
+    <div class="col-12 col-sm-6 col-xl-4">
       <div class="card metric h-100">
         <div class="card-body">
           <span class="metric-icon"><i class="bi bi-receipt"></i></span>
@@ -27,7 +36,7 @@
         </div>
       </div>
     </div>
-    <div class="col-12 col-sm-6 col-xl-3">
+    <div class="col-12 col-sm-6 col-xl-4">
       <div class="card metric h-100">
         <div class="card-body">
           <span class="metric-icon tone-success"><i class="bi bi-cash-stack"></i></span>
@@ -38,25 +47,13 @@
         </div>
       </div>
     </div>
-    <div class="col-12 col-sm-6 col-xl-3">
+    <div class="col-12 col-sm-6 col-xl-4">
       <div class="card metric h-100">
         <div class="card-body">
           <span class="metric-icon tone-danger"><i class="bi bi-hourglass-split"></i></span>
           <div>
             <div class="metric-label">Total outstanding</div>
             <div class="metric-value" style="color:#c02636">₱{{ data.total_outstanding }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-sm-6 col-xl-3">
-      <div class="card metric h-100">
-        <div class="card-body">
-          <span class="metric-icon"><i class="bi bi-person-check"></i></span>
-          <div>
-            <div class="metric-label">Attendance rate</div>
-            <div class="metric-value">{{ data.overall_attendance_rate|floatformat:2 }}
-              <span class="fs-6 text-muted fw-medium">/ 1.0</span></div>
           </div>
         </div>
       </div>
@@ -73,7 +70,7 @@
             <table class="table table-hover align-middle">
               <thead>
                 <tr>
-                  <th>Event</th><th>Semester</th><th>Attendance</th>
+                  <th>Event</th><th class="text-end">Fines issued</th>
                   <th class="text-end">Collected</th><th class="text-end">Outstanding</th>
                 </tr>
               </thead>
@@ -81,13 +78,12 @@
                 {% for e in data.events %}
                   <tr>
                     <td class="fw-semibold">{{ e.event_name }}</td>
-                    <td class="text-muted">{{ e.semester }}</td>
-                    <td>{{ e.attendance_rate|floatformat:2 }}</td>
+                    <td class="text-end">₱{{ e.fines_issued }}</td>
                     <td class="text-end text-success fw-semibold">₱{{ e.collected }}</td>
                     <td class="text-end fw-semibold" style="color:#c02636">₱{{ e.outstanding }}</td>
                   </tr>
                 {% empty %}
-                  <tr><td colspan="5" class="text-center text-muted py-5"><i class="bi bi-inbox fs-3 d-block mb-1"></i>No events yet.</td></tr>
+                  <tr><td colspan="4" class="text-center text-muted py-5"><i class="bi bi-inbox fs-3 d-block mb-1"></i>No events in this semester yet.</td></tr>
                 {% endfor %}
               </tbody>
             </table>

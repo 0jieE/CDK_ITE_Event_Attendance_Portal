@@ -107,9 +107,13 @@ class LateStatusRemovedTests(TestCase):
         html = self.client.get(reverse("portal:reports-attendance")).content.decode()
         self.assertIn('colspan="5"', html)
 
-    def test_dashboard_attendance_rate_is_kept(self):
+    def test_dashboard_has_no_attendance_rate(self):
         html = self.client.get(reverse("portal:dashboard")).content.decode()
-        self.assertIn("Attendance rate", html)             # only the REPORT's Rate column was removed
+        self.assertNotIn("Attendance rate", html)
+        self.assertNotIn(">Attendance<", html)             # no per-event attendance column either
+        data = self.api.get(reverse("dashboard")).json()
+        self.assertNotIn("overall_attendance_rate", data)
+        self.assertNotIn("attendance_rate", data["events"][0])
 
     # --- other pages -------------------------------------------------------------------
     def test_no_late_option_or_badge_on_any_portal_page(self):

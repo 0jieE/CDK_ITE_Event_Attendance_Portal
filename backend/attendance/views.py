@@ -163,8 +163,15 @@ class FineViewSet(viewsets.ModelViewSet):
 @api_view(["GET"])
 @permission_classes([IsAdmin])
 def dashboard(request):
-    """Top-level admin dashboard aggregates."""
-    return Response(services.build_dashboard())
+    """Dashboard aggregates for the active semester.
+
+    ``?semester=<id>`` picks another semester; ``?semester=all`` aggregates everything.
+    """
+    raw = request.query_params.get("semester", "")
+    if raw == "all":
+        return Response(services.build_dashboard(all_semesters=True))
+    semester = Semester.objects.filter(pk=raw).first() if raw.isdigit() else None
+    return Response(services.build_dashboard(semester=semester))
 
 
 def _parse_report_query(request):

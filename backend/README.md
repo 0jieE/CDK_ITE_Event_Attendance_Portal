@@ -273,7 +273,7 @@ The adviser can use **only the portal**; Django Administration is for the Super 
 ### Where each section lives (all under `/portal/`)
 | Section | URL | Notes |
 |---------|-----|-------|
-| Dashboard | `/portal/` | cards + per-event table + collected-vs-outstanding chart |
+| Dashboard | `/portal/` | for the **active semester** only (set one under Settings): fines issued / collected / outstanding cards, per-event table and a collected-vs-outstanding chart; no attendance rate. `GET /api/dashboard/` takes `?semester=<id>` or `all` |
 | Instructors | `/portal/instructors/` | creates + links the `User` in one form |
 | Students | `/portal/students/` | linked `User` + `student_number` + **year level & section**; **Import masterlist** (CSV/Excel) + printable credentials |
 | Events | `/portal/events/` | dates + `required_types` multi-select; validates `end ≥ start`; **fine per day** for multi-day events |

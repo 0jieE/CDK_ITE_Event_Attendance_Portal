@@ -92,7 +92,7 @@ def logout_view(request):
 # ---------------------------------------------------------------------------
 @admin_required
 def dashboard_view(request):
-    """Landing page: summary cards, per-event breakdown and a chart."""
+    """Landing page for the active semester: summary cards, per-event breakdown and a chart."""
     data = services.build_dashboard()
     context = {
         "active": "dashboard",
