@@ -8,6 +8,7 @@ import datetime
 import hashlib
 from decimal import Decimal
 
+from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -275,7 +276,23 @@ def record_scan(token, instructor, *, scanned_at=None, request=None):
     log.status = AttendanceLog.Status.PRESENT
     log.scanned_at = scanned_at
     log.scanned_by = instructor
-    log.save()
+    try:
+        with transaction.atomic():
+            log.save()
+    except IntegrityError:
+        # Another scan of the same student / slot landed at the very same moment (two instructors, or a
+        # phone syncing while another scans). The database allows ONE log per slot, so that scan won:
+        # answer exactly as for any repeat scan instead of failing.
+        winner = AttendanceLog.objects.filter(
+            student=qr.student, event=event, date=qr.date, attendance_type=slot,
+        ).first()
+        if winner is None or not winner.is_credited:
+            raise
+        return _scan_result(
+            winner, created=False,
+            detail="Attendance was already recorded for this slot.",
+            http_status=200, request=request,
+        )
 
     return _scan_result(
         log, created=True, detail="Attendance recorded.", http_status=201,
