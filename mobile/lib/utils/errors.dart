@@ -8,6 +8,7 @@ import '../services/api_service.dart';
 /// A short, human message for any error raised by a request.
 String friendlyError(Object error) {
   if (error is ApiException) return error.message;
+  if (error is OfflineDataMissing) return error.message;
   if (error is SessionExpired) {
     return 'Your session expired. Please sign in again.';
   }
@@ -20,6 +21,7 @@ String friendlyError(Object error) {
 /// True when [error] means the server couldn't be reached at all (no signal,
 /// no internet, DNS/TLS failure, timeout) rather than the server saying no.
 bool isNetworkError(Object error) =>
+    error is OfflineDataMissing ||
     error is SocketException ||
     error is http.ClientException ||
     error is TimeoutException ||

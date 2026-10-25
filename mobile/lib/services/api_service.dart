@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' show MediaType;
 
@@ -13,6 +15,7 @@ import '../models/offline_pack.dart';
 import '../models/qr_slot.dart';
 import '../models/student_profile.dart';
 import '../models/user.dart';
+import '../utils/errors.dart' show isNetworkError;
 import '../utils/image_type.dart';
 import '../utils/manila_time.dart' show apiDate;
 import 'local_cache.dart';
@@ -40,6 +43,18 @@ class ApiException implements Exception {
 /// should bounce the user back to the login screen.
 class SessionExpired implements Exception {}
 
+/// Offline, and nothing for this request was saved on this phone yet.
+class OfflineDataMissing implements Exception {
+  final String message;
+  const OfflineDataMissing([
+    this.message = "You're offline and this hasn't been saved on this phone "
+        'yet. Open the app once with internet so it can download it.',
+  ]);
+
+  @override
+  String toString() => message;
+}
+
 /// Central authenticated HTTP client.
 ///
 /// Attaches the JWT access token to every request and transparently refreshes
@@ -54,6 +69,21 @@ class ApiService {
 
   /// Called when the session is irrecoverably expired (drives logout/redirect).
   void Function()? onUnauthorized;
+
+  /// Whose data the read cache holds: the signed-in user's id (set by the
+  /// auth provider). Null turns the cache off.
+  int? cacheOwner;
+
+  /// Reachability reports from requests, and whether the phone is already
+  /// known to be offline (then reads skip the network). Wired to the
+  /// connectivity service.
+  void Function()? onReachable;
+  void Function()? onUnreachable;
+  bool Function()? isKnownOffline;
+
+  /// While screens show saved data: when the oldest of it was downloaded
+  /// (null while everything shown is live).
+  final ValueNotifier<DateTime?> offlineDataTime = ValueNotifier(null);
 
   ApiService({TokenStorage? tokens, http.Client? client, LocalCache? cache})
       : _tokens = tokens ?? TokenStorage(),
@@ -103,6 +133,89 @@ class ApiService {
 
   Future<void> logout() => _tokens.clear();
 
+  /// Can the server be reached at all? (Any HTTP answer counts; no auth.)
+  Future<bool> ping() async {
+    try {
+      await _client
+          .get(Uri.parse('${ApiConfig.baseUrl}/healthz/'))
+          .timeout(const Duration(seconds: 8));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Read cache (offline)
+  // -------------------------------------------------------------------------
+  /// Per user and per request (path + sorted query), e.g.
+  /// `cache:7:/student/qr/?date=2026-10-08&event=3`.
+  String? _cacheKey(String path, Map<String, dynamic>? query) {
+    final owner = cacheOwner;
+    if (owner == null) return null;
+    final q = [
+      for (final e in (query ?? const <String, dynamic>{}).entries)
+        if (e.value != null) '${e.key}=${e.value}',
+    ]..sort();
+    return 'cache:$owner:$path${q.isEmpty ? '' : '?${q.join('&')}'}';
+  }
+
+  /// Read-through cache for the screens' GETs: fresh from the server when it
+  /// can be reached (and saved on the phone), otherwise the saved copy - and
+  /// when the phone is known to be offline the network isn't tried at all.
+  /// With nothing saved, throws [OfflineDataMissing] (never an empty list).
+  Future<dynamic> _cached(
+    String path,
+    Map<String, dynamic>? query,
+    Future<dynamic> Function() fetch,
+  ) async {
+    final key = _cacheKey(path, query);
+    if (key == null) return fetch();
+    if (isKnownOffline?.call() ?? false) return _fromCache(key);
+    try {
+      // With a saved copy to fall back on, don't hang on a dead network.
+      final hasCopy = await cache.read(key) != null;
+      final data = await (hasCopy
+          ? fetch().timeout(const Duration(seconds: 15))
+          : fetch());
+      onReachable?.call();
+      offlineDataTime.value = null;
+      await cache.writeJson(key, {
+        'at': DateTime.now().toUtc().toIso8601String(),
+        'data': data,
+      });
+      return data;
+    } catch (e) {
+      if (!isNetworkError(e)) rethrow;
+      onUnreachable?.call();
+      return _fromCache(key);
+    }
+  }
+
+  Future<dynamic> _fromCache(String key) async {
+    final stored = await cache.readJson(key);
+    if (stored is! Map || !stored.containsKey('data')) {
+      throw const OfflineDataMissing();
+    }
+    final at = DateTime.tryParse('${stored['at']}');
+    final shown = offlineDataTime.value;
+    if (at != null && (shown == null || at.isBefore(shown))) {
+      offlineDataTime.value = at;
+    }
+    return stored['data'];
+  }
+
+  Future<dynamic> _cachedGet(String path, [Map<String, dynamic>? query]) =>
+      _cached(path, query, () => getJson(path, query: query));
+
+  Future<List<dynamic>> _cachedAll(String path,
+          [Map<String, dynamic>? query]) async =>
+      (await _cached(path, query, () => _getAll(path, query: query))) as List;
+
+  /// Forget everything cached for [owner] (offline sign-in turned off).
+  Future<void> clearCacheFor(int owner) =>
+      cache.removeWhere((k) => k.startsWith('cache:$owner:'));
+
   // -------------------------------------------------------------------------
   // Domain endpoints (typed)
   // -------------------------------------------------------------------------
@@ -141,7 +254,7 @@ class ApiService {
 
   // --- Instructor ---
   Future<List<Event>> instructorEvents() async {
-    final data = await getJson('/instructor/events/');
+    final data = await _cachedGet('/instructor/events/');
     return _results(data)
         .map((e) => Event.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -151,7 +264,7 @@ class ApiService {
   /// instructors only. (Without `all=true` the endpoint lists just today's
   /// scannable events, see [instructorEvents].)
   Future<List<Event>> instructorEventsAll() async {
-    final data = await _getAll('/instructor/events/', query: {'all': 'true'});
+    final data = await _cachedAll('/instructor/events/', {'all': 'true'});
     return data.map((e) => Event.fromJson(e as Map<String, dynamic>)).toList();
   }
 
@@ -162,9 +275,9 @@ class ApiService {
     int eventId, {
     DateTime? date,
   }) async {
-    final data = await getJson(
+    final data = await _cachedGet(
       '/instructor/events/$eventId/attendance/',
-      query: {if (date != null) 'date': apiDate(date)},
+      {if (date != null) 'date': apiDate(date)},
     );
     return EventAttendance.fromJson(data as Map<String, dynamic>);
   }
@@ -217,24 +330,24 @@ class ApiService {
 
   // --- Student ---
   Future<StudentProfile> studentProfile() async {
-    final data = await getJson('/student/profile/') as Map<String, dynamic>;
+    final data = await _cachedGet('/student/profile/') as Map<String, dynamic>;
     return StudentProfile.fromJson(data);
   }
 
   Future<Balance> studentBalance() async {
-    final data = await getJson('/student/balance/') as Map<String, dynamic>;
+    final data = await _cachedGet('/student/balance/') as Map<String, dynamic>;
     return Balance.fromJson(data);
   }
 
   /// Current + upcoming ACTIVE events.
   Future<List<Event>> studentEvents() async {
-    final data = await _getAll('/student/events/');
+    final data = await _cachedAll('/student/events/');
     return data.map((e) => Event.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   /// ALL events (past, current, future), newest start date first.
   Future<List<Event>> studentEventsAll() async {
-    final data = await _getAll('/student/events/', query: {'all': 'true'});
+    final data = await _cachedAll('/student/events/', {'all': 'true'});
     return data.map((e) => Event.fromJson(e as Map<String, dynamic>)).toList();
   }
 
@@ -250,7 +363,7 @@ class ApiService {
   }
 
   Future<List<QrSlot>> studentQrs({int? event, String? date}) async {
-    final data = await getJson('/student/qr/', query: {
+    final data = await _cachedGet('/student/qr/', {
       'event': ?event,
       'date': ?date,
     });
@@ -260,17 +373,26 @@ class ApiService {
   }
 
   /// The student's attendance logs (all pages); omit [event] for every event.
+  /// Offline, one event's logs come from the saved copy of all of them when
+  /// that event wasn't saved on its own.
   Future<List<AttendanceLog>> studentAttendance({int? event}) async {
-    final data = await _getAll('/student/attendance/', query: {
-      'event': ?event,
-    });
+    List<dynamic> data;
+    try {
+      data = await _cachedAll('/student/attendance/', {'event': ?event});
+    } on OfflineDataMissing {
+      if (event == null) rethrow;
+      data = [
+        for (final e in await _cachedAll('/student/attendance/'))
+          if (e is Map && e['event'] == event) e,
+      ];
+    }
     return data
         .map((e) => AttendanceLog.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
   Future<List<Fine>> studentFines() async {
-    final data = await _getAll('/student/fines/');
+    final data = await _cachedAll('/student/fines/');
     return data.map((e) => Fine.fromJson(e as Map<String, dynamic>)).toList();
   }
 

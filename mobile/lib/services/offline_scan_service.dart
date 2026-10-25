@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 
 import '../models/attendance_type.dart';
 import '../models/event.dart';
@@ -70,6 +71,13 @@ class OfflineScanService extends ChangeNotifier {
   String get _packKey => 'instructor:$_userId:offline_pack';
   String get _queueKey => 'instructor:$_userId:scan_queue';
 
+  /// Completes once the signed-in instructor's saved pack and queue are
+  /// loaded - screens wait for it so a cold start offline doesn't look empty.
+  Completer<void> _loaded = Completer<void>();
+
+  Future<void> _waitLoaded() => _loaded.future
+      .timeout(const Duration(seconds: 5), onTimeout: () {});
+
   /// Switch to [userId]'s pack and queue (null = signed out: forget them in
   /// memory; they stay on the phone for that instructor's next sign-in).
   Future<void> attach(int? userId) async {
@@ -80,7 +88,9 @@ class OfflineScanService extends ChangeNotifier {
     _lastSync = null;
     _syncError = null;
     _retry?.cancel();
-    if (userId != null) {
+    if (userId == null) {
+      if (_loaded.isCompleted) _loaded = Completer<void>();
+    } else {
       _pack = OfflinePack.fromStore(await api.cache.readJson(_packKey));
       final stored = await api.cache.readJson(_queueKey);
       if (stored is List) {
@@ -89,6 +99,7 @@ class OfflineScanService extends ChangeNotifier {
             if (q is Map) QueuedScan.fromJson(Map<String, dynamic>.from(q)),
         ];
       }
+      if (!_loaded.isCompleted) _loaded.complete();
     }
     notifyListeners();
     if (_queue.isNotEmpty) unawaited(sync());
@@ -119,8 +130,11 @@ class OfflineScanService extends ChangeNotifier {
   }
 
   /// Today's scannable events: fresh from the server when online (which also
-  /// refreshes the pack), else the downloaded pack if it is for today.
+  /// refreshes the pack), else the pack saved on the phone if it is for today.
+  /// Known offline, the network isn't tried at all.
   Future<List<Event>> loadEvents() async {
+    await _waitLoaded();
+    if (!connectivity.isOnline) return _savedEvents();
     try {
       return (await refreshPack()).events;
     } catch (e) {
@@ -128,12 +142,25 @@ class OfflineScanService extends ChangeNotifier {
       if (e is ApiException && e.statusCode == 404) return api.instructorEvents();
       if (!isNetworkError(e)) rethrow;
       connectivity.reportUnreachable();
-      final pack = _pack;
-      if (pack != null && daysBetween(pack.date, manilaToday(now)) == 0) {
-        return pack.events;
-      }
-      rethrow;
+      return _savedEvents();
     }
+  }
+
+  /// The saved pack's events, or a clear reason why there are none.
+  List<Event> _savedEvents() {
+    final pack = _pack;
+    if (pack == null) {
+      throw const OfflineDataMissing(
+          "You're offline and today's events aren't saved on this phone yet. "
+          'Open the Scan tab once with internet to download them.');
+    }
+    if (daysBetween(pack.date, manilaToday(now)) != 0) {
+      throw OfflineDataMissing(
+          "You're offline. The student list saved on this phone is from "
+          '${DateFormat('MMM d').format(pack.date)}; connect to the internet '
+          "to download today's.");
+    }
+    return pack.events;
   }
 
   // -------------------------------------------------------------------------
@@ -142,6 +169,7 @@ class OfflineScanService extends ChangeNotifier {
   /// Judge [token] on the phone and queue it. Mirrors the server's checks as
   /// far as the pack allows; the server has the final word at sync.
   Future<ScanResult> scanOffline(String token) async {
+    await _waitLoaded();
     final scannedAt = now;
     final local = toManila(scannedAt);
     final pack = _pack;

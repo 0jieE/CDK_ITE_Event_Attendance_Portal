@@ -32,6 +32,16 @@ class LocalCache {
     } catch (_) {/* best effort */}
   }
 
+  /// Remove every key matching [test].
+  Future<void> removeWhere(bool Function(String key) test) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final k in prefs.getKeys().where(test).toList()) {
+        await prefs.remove(k);
+      }
+    } catch (_) {/* best effort */}
+  }
+
   /// Decoded JSON stored under [key], or null (missing or unreadable).
   Future<dynamic> readJson(String key) async {
     final raw = await read(key);

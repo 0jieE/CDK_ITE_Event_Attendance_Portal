@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/qr_slot.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_provider.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/offline_scan_service.dart';
 import '../../theme/app_theme.dart';
@@ -178,7 +179,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
     final api = context.read<ApiService>();
     final offline = context.read<OfflineScanService?>();
     final connectivity = context.read<ConnectivityService?>();
-    if (offline != null && connectivity != null && !connectivity.isOnline) {
+    final offlineSession =
+        context.read<AuthProvider?>()?.offlineSession ?? false;
+    // No connection, or signed in offline (no server session to send with).
+    if (offline != null &&
+        (offlineSession || (connectivity != null && !connectivity.isOnline))) {
       return offline.scanOffline(token);
     }
     try {
@@ -193,7 +198,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
         connectivity?.reportUnreachable();
         return offline.scanOffline(token);
       }
-      if (e is SessionExpired) return ScanResult.failure(friendlyError(e), null);
+      if (e is SessionExpired) {
+        // Keep the scan: it syncs after signing in again.
+        if (offline != null) return offline.scanOffline(token);
+        return ScanResult.failure(friendlyError(e), null);
+      }
       return ScanResult.failure('Network error — please try again.', null);
     }
   }

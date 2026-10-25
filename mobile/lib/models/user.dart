@@ -9,6 +9,10 @@ class User {
   final String role;
   final String? profileImage; // 256px photo URL, if set
 
+  /// Changes whenever the password changes (from `/api/me/`, when the server
+  /// provides it): a stored offline sign-in with another value is stale.
+  final String? passwordVersion;
+
   const User({
     required this.id,
     required this.username,
@@ -18,6 +22,7 @@ class User {
     required this.isStudent,
     required this.role,
     this.profileImage,
+    this.passwordVersion,
   });
 
   /// Copy with edited identity fields. Pass [clearPhoto] to drop the photo
@@ -37,6 +42,7 @@ class User {
       isStudent: isStudent,
       role: role,
       profileImage: clearPhoto ? null : (profileImage ?? this.profileImage),
+      passwordVersion: passwordVersion,
     );
   }
 
@@ -50,6 +56,7 @@ class User {
         'is_student': isStudent,
         'role': role,
         'profile_image': profileImage,
+        'password_version': passwordVersion,
       };
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -64,6 +71,7 @@ class User {
       isStudent: json['is_student'] as bool? ?? false,
       role: json['role'] as String? ?? 'user',
       profileImage: json['profile_image'] as String?,
+      passwordVersion: json['password_version'] as String?,
     );
   }
 }

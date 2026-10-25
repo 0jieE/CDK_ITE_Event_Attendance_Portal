@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
+import '../../services/auth_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/errors.dart';
 import '../../utils/validators.dart';
@@ -44,6 +45,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
     final api = context.read<ApiService>();
+    final auth = context.read<AuthProvider?>();
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
     try {
@@ -51,6 +53,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         currentPassword: _current.text,
         newPassword: _new.text,
       );
+      // Offline sign-in on this phone follows the new password.
+      await auth?.passwordChanged(_new.text);
       if (!mounted) return;
       _current.clear();
       _new.clear();

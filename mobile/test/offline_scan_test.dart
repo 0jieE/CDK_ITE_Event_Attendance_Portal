@@ -78,13 +78,16 @@ void main() {
   late FakeServer server;
   late DateTime clock;
 
+  late ConnectivityService connectivity;
+
   OfflineScanService service() => OfflineScanService(
         api: ApiService(tokens: FakeTokens(), client: server.client),
-        connectivity: ConnectivityService(listen: false),
+        connectivity: connectivity,
         clock: () => clock,
       );
 
   setUp(() {
+    connectivity = ConnectivityService(listen: false);
     server = FakeServer();
     clock = manila(7, 30);
   });
@@ -212,14 +215,44 @@ void main() {
     final svc = service();
     await svc.attach(1);
     server.offline = true;
-    await expectLater(svc.loadEvents(), throwsA(isA<http.ClientException>()));
+    // Nothing saved yet: a clear message, not an empty list.
+    await expectLater(
+        svc.loadEvents(),
+        throwsA(isA<OfflineDataMissing>().having(
+            (e) => e.message, 'message', contains("aren't saved on this phone"))));
+    expect(connectivity.isOnline, isFalse);
+
     server.offline = false;
+    connectivity.reportReachable();
     expect((await svc.loadEvents()).single.name, 'Tech Week');
+
+    // Known offline: the saved pack, without even trying the network.
     server.offline = true;
+    connectivity.reportUnreachable();
     expect((await svc.loadEvents()).single.name, 'Tech Week');
+
     // The pack is for one day only.
     clock = manila(7, 30).add(const Duration(days: 1));
-    await expectLater(svc.loadEvents(), throwsA(isA<http.ClientException>()));
+    await expectLater(
+        svc.loadEvents(),
+        throwsA(isA<OfflineDataMissing>()
+            .having((e) => e.message, 'message', contains('from Oct 8'))));
+    svc.dispose();
+  });
+
+  test('cold start offline: events wait for the saved pack to load', () async {
+    final first = service();
+    await first.attach(1);
+    await first.refreshPack(); // saved on the phone
+    first.dispose();
+
+    // App restarted with no connection: the Scan tab asks before attach().
+    server.offline = true;
+    connectivity.reportUnreachable();
+    final svc = service();
+    final events = svc.loadEvents();
+    await svc.attach(1);
+    expect((await events).single.name, 'Tech Week');
     svc.dispose();
   });
 

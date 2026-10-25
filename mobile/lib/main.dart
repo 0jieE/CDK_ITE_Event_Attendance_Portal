@@ -8,6 +8,8 @@ import 'screens/student/student_home.dart';
 import 'services/api_service.dart';
 import 'services/auth_provider.dart';
 import 'services/connectivity_service.dart';
+import 'services/offline_credentials.dart';
+import 'services/offline_prefetch.dart';
 import 'services/offline_scan_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/logout_action.dart';
@@ -24,12 +26,29 @@ class IteAttendanceApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()..bootstrap()),
+        ChangeNotifierProvider(create: (_) => ConnectivityService()),
+        ChangeNotifierProvider(
+          create: (ctx) {
+            final connectivity = ctx.read<ConnectivityService>();
+            final auth = AuthProvider(
+              // Sign in offline with an account used online on this phone.
+              offlineLogin: OfflineCredentials(),
+              connectivity: connectivity,
+            );
+            // Requests report reachability; known offline, screens read the
+            // saved copies without trying the network.
+            auth.api
+              ..onReachable = connectivity.reportReachable
+              ..onUnreachable = connectivity.reportUnreachable
+              ..isKnownOffline = (() => !connectivity.isOnline);
+            connectivity.probe = auth.api.ping;
+            return auth..bootstrap();
+          },
+        ),
         // Expose the authenticated HTTP client to screens.
         ProxyProvider<AuthProvider, ApiService>(
           update: (_, auth, _) => auth.api,
         ),
-        ChangeNotifierProvider(create: (_) => ConnectivityService()),
         // Offline scanning queue, switched to whichever instructor signs in.
         ChangeNotifierProxyProvider2<AuthProvider, ConnectivityService,
             OfflineScanService>(
@@ -46,13 +65,16 @@ class IteAttendanceApp extends StatelessWidget {
           },
         ),
       ],
-      child: MaterialApp(
-        title: 'ITE Attendance',
-        debugShowCheckedModeBanner: false,
-        // Always the light + green look, even when the phone is in dark mode.
-        theme: AppTheme.light,
-        themeMode: AppTheme.themeMode,
-        home: const RootRouter(),
+      // Downloads each role's data for offline use whenever online.
+      child: OfflinePrefetcher(
+        child: MaterialApp(
+          title: 'ITE Attendance',
+          debugShowCheckedModeBanner: false,
+          // Always the light + green look, even when the phone is in dark mode.
+          theme: AppTheme.light,
+          themeMode: AppTheme.themeMode,
+          home: const RootRouter(),
+        ),
       ),
     );
   }

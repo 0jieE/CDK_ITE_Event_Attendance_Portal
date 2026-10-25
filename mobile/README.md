@@ -1,3 +1,8 @@
+> **This is the earlier combined app (instructor + student in one).** It has been split into two
+> separate apps: [`../mobile_student`](../mobile_student) (**ITE Students**) and
+> [`../mobile_instructor`](../mobile_instructor) (**ITE Instructors**, QR scanning). Use those for new
+> installs; this folder is kept for reference and still works against the same API.
+
 # ITE Attendance — Mobile App (Flutter)
 
 Single Flutter app for the **Hybrid QR-Code Based Attendance & Financial
@@ -63,6 +68,50 @@ are issued by the Department Adviser, who gives each student a username and pass
   phone, so a QR generated earlier still shows and can be scanned.
 - **Offline start (both roles):** the app opens with the last signed-in account when there is no
   connection, with a "You're offline" strip under the app bar.
+
+## Offline sign-in (instructors and students)
+An account that has signed in **online** on a phone can later sign in on that phone with **no
+connection** (also after a log-out or an app restart). The first sign-in on a phone must be online;
+admin accounts are never remembered.
+- **Storage:** after each online sign-in the password is kept only as a salted **PBKDF2-HMAC-SHA256**
+  hash (100,000 rounds, random 16-byte salt per account, computed in a background isolate) together
+  with the profile, in secure storage (Android Keystore / iOS Keychain), under a key derived from
+  the username (`services/offline_credentials.dart`). The password itself is never stored.
+- **Wrong passwords:** 5 tries, then a 30 s wait that doubles with each further miss (max 1 h).
+- **Expiry:** offline sign-in is refused 30 days after the account's last online sign-in
+  ("Connect to the internet to sign in again"), and the stored hash is deleted.
+- **What it gives:** the existing offline features only (instructor: offline pack + scan queue;
+  student: saved QR and events). There is no server session behind it; scans go straight to the
+  offline queue.
+- **Back online:** the session is re-checked. A still-valid server session (tokens kept from before)
+  carries on online; otherwise the user goes to the login screen with their username filled in and a
+  "sign in again" note. Offline scans stay queued and upload after that online sign-in, under the
+  same instructor.
+- **Stale passwords:** if the server refuses, online, the password this phone remembers (changed by
+  the adviser, or the account disabled), the stored hash is deleted; a mere typo keeps it. If
+  `/api/me/` returns a `password_version`, a mismatch on reconnect also deletes it and signs out.
+  Changing the password in the app updates the stored hash.
+- **Log-out** keeps offline sign-in; tick **Forget this phone** in the log-out dialog to remove it
+  (that also deletes the account's saved screens; unsynced scans are kept).
+
+## Offline data
+Everything a screen shows is saved on the phone, per user, so it is there after going offline,
+closing the app and reopening it:
+- **Download up front:** right after an online sign-in (and whenever the app comes back online or
+  to the foreground, at most every 2 min) `OfflinePrefetcher` downloads every screen's data,
+  without waiting for tabs to be opened. Student: events (current + all), today's QR for each
+  running event, attendance history, fines, balance, profile. Instructor: the offline pack,
+  all events, and today's roster of each running event.
+- **Read-through cache** (`ApiService`): each screen request is saved under
+  `cache:<user id>:<path>?<sorted query>`. Known offline, the network isn't tried at all; on a
+  network failure the saved copy is used. With nothing saved, the screen says so ("Open the app once
+  with internet…") instead of showing an empty list. A history for one event falls back to the
+  saved history of all events.
+- **The offline strip** under the app bar says when the shown data was saved.
+- **Reconnecting:** besides Wi-Fi / data changes, the app checks the server every 20 s while it is
+  unreachable on an active connection (Wi-Fi without internet), so it notices when the internet
+  returns.
+- The student QR is drawn on the phone from its token, so it needs no image download.
 - **History:** filter by event (defaults to the event closest to today), grouped by date.
 - **Profile:** change photo (camera/gallery), name, username and password.
 - **Theme:** Material 3 in the ITE brand green `#41B422` (light only).

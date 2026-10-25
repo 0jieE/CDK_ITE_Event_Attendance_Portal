@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/auth_provider.dart';
+import '../services/connectivity_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/state_message.dart';
 
@@ -17,6 +18,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _obscure = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Back from an offline session or a log-out: the same account again.
+    _userCtrl.text = context.read<AuthProvider>().lastUsername ?? '';
+  }
 
   @override
   void dispose() {
@@ -36,6 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final online = context.watch<ConnectivityService?>()?.isOnline ?? true;
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: Container(
@@ -82,6 +91,23 @@ class _LoginScreenState extends State<LoginScreen> {
                               textAlign: TextAlign.center,
                               style: TextStyle(color: scheme.onSurfaceVariant)),
                           const SizedBox(height: 28),
+                          if (auth.notice != null) ...[
+                            InlineBanner(
+                              isError: false,
+                              icon: Icons.cloud_done_outlined,
+                              message: auth.notice!,
+                            ),
+                            const SizedBox(height: 16),
+                          ] else if (!online) ...[
+                            const InlineBanner(
+                              isError: false,
+                              icon: Icons.cloud_off,
+                              message: "You're offline. You can sign in with an "
+                                  'account that has signed in on this phone '
+                                  'before.',
+                            ),
+                            const SizedBox(height: 16),
+                          ],
                           TextFormField(
                             controller: _userCtrl,
                             textInputAction: TextInputAction.next,

@@ -48,16 +48,39 @@ class ConnectivityService extends ChangeNotifier {
     if (!_reachable) return;
     _reachable = false;
     notifyListeners();
+    _scheduleProbe();
   }
 
   void reportReachable() {
+    _probeTimer?.cancel();
     if (_reachable) return;
     _reachable = true;
     notifyListeners();
   }
 
+  /// Checks whether the server answers again (set once the API exists).
+  /// While unreachable with the radio on (e.g. Wi-Fi without internet) it is
+  /// tried every [probeEvery], since nothing else would notice the return.
+  Future<bool> Function()? probe;
+  static const probeEvery = Duration(seconds: 20);
+  Timer? _probeTimer;
+
+  void _scheduleProbe() {
+    _probeTimer?.cancel();
+    if (probe == null) return;
+    _probeTimer = Timer(probeEvery, () async {
+      if (_reachable) return;
+      if (_radio && (await probe?.call() ?? false)) {
+        reportReachable();
+      } else {
+        _scheduleProbe();
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _probeTimer?.cancel();
     _sub?.cancel();
     super.dispose();
   }
