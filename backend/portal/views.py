@@ -128,6 +128,25 @@ class EventsSection(CrudSection):
             )
         )
 
+    def get_urls(self):
+        from django.urls import path
+
+        return super().get_urls() + [
+            path("events/<int:pk>/toggle-active/", admin_required(self.toggle_active_view), name="events-toggle-active"),
+        ]
+
+    def toggle_active_view(self, request, pk):
+        """Switch an event on/off straight from the table (the table asks for confirmation)."""
+        event = get_object_or_404(Event, pk=pk)
+        if request.method != "POST":
+            return HttpResponse(status=405)
+        event.is_active = not event.is_active
+        event.save(update_fields=["is_active"])
+        state = "active" if event.is_active else "inactive"
+        return htmx_action_response(
+            toast=f"“{event.name}” is now {state}.", refresh_event=self.refresh_event, close_modal=False,
+        )
+
     def delete_view(self, request, pk):
         event = get_object_or_404(Event, pk=pk)
         reason = event.delete_block_reason

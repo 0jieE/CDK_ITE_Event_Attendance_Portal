@@ -24,12 +24,18 @@
           <td>
             {% for t in obj.required_types %}<span class="badge text-bg-light border me-1">{{ t }}</span>{% endfor %}
           </td>
-          <td>
-            {% if obj.is_active %}
-              <span class="badge text-bg-success">Active</span>
-            {% else %}
-              <span class="badge text-bg-secondary">Inactive</span>
-            {% endif %}
+          <td data-order="{{ obj.is_active|yesno:'1,0' }}">
+            {# The click is cancelled so the switch never shows a state the server did not confirm; #}
+            {# on OK the row is reloaded with the real state. #}
+            <div class="form-check form-switch d-flex align-items-center gap-2 ps-0 mb-0">
+              <input type="checkbox" role="switch" class="form-check-input ms-0 flex-shrink-0"
+                     {% if obj.is_active %}checked{% endif %} {% if not can_edit %}disabled{% endif %}
+                     aria-label="Event active"
+                     onclick="event.preventDefault()"
+                     hx-post="{% url 'portal:events-toggle-active' obj.id %}" hx-trigger="click" hx-swap="none"
+                     hx-confirm="{% if obj.is_active %}Turn OFF “{{ obj.name }}”? Instructors will no longer be able to scan for it, and its fines stop updating automatically.{% else %}Turn ON “{{ obj.name }}”? Instructors can scan for it again (on its dates) and its fines update automatically.{% endif %}">
+              <span class="small {% if obj.is_active %}text-success{% else %}text-muted{% endif %}">{% if obj.is_active %}Active{% else %}Inactive{% endif %}</span>
+            </div>
           </td>
           <td class="text-end no-print">
             {% if can_edit %}

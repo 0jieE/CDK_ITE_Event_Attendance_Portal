@@ -299,7 +299,7 @@ The adviser can use **only the portal**; Django Administration is for the Super 
 | Dashboard | `/portal/` | for the **active semester** only (set one under Settings): fines issued / collected / outstanding cards, per-event table and a collected-vs-outstanding chart; no attendance rate. `GET /api/dashboard/` takes `?semester=<id>` or `all` |
 | Instructors | `/portal/instructors/` | creates + links the `User` in one form |
 | Students | `/portal/students/` | linked `User` + `student_number` + **year level & section**; **Import masterlist** (CSV/Excel) + printable credentials |
-| Events | `/portal/events/` | dates + `required_types` multi-select; validates `end ≥ start`; **fine per day** for multi-day events |
+| Events | `/portal/events/` | dates + `required_types` multi-select; validates `end ≥ start`; **fine per day** for multi-day events; an **Active** switch in the table (with a confirmation) turns an event on/off - an inactive event is hidden from instructors, rejects scans and stops auto-updating fines |
 | **Reports** (sidebar group) | — | Attendance Report, Attendance Logs, Financial Report, Fines |
 | ↳ Attendance Logs | `/portal/attendance_logs/` | **read-only**, two tabs: **By Event** (event, section, type) and **By Student** (student, event, type); the **semester** filter (default: the **active** semester) applies to both. No status column/filter: only scans are stored (a log = present), absences are never recorded as rows. **Download CSV** + **Print** (printed page = ITE logo + event or student name header + the table only) |
 | ↳ Attendance Report | `/portal/reports/attendance/` | filters + **Download CSV** + **Print** |
