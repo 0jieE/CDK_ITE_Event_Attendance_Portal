@@ -2,10 +2,58 @@
 By-Student daily attendance detail (one chosen student + event).
 Cell shows '–' when the slot isn't required, 'Pending' while open, 'Absent' when no scan, else Present.
 {% endcomment %}
-{% if not student_obj or not event_obj %}
-  <div class="text-center text-muted py-5">
+{% if not student_obj %}
+  <div class="text-center text-muted py-5 no-print">
     <i class="bi bi-person-lines-fill fs-1 d-block mb-2"></i>
-    Select a <strong>student</strong> and an <strong>event</strong> to see their daily attendance detail.
+    Search and select a <strong>student</strong> to see their fines. Pick an <strong>event</strong> for the
+    day-by-day detail, or leave it on <em>All events</em> for a printable statement.
+  </div>
+{% elif not event_obj %}
+  {# Statement: every fine of the student in the selected semester (print it to hand to the student). #}
+  <div class="d-flex align-items-center gap-3 mb-3 no-print">
+    {% include "portal/partials/avatar.html" with u=student_obj.user size=56 %}
+    <div>
+      <h5 class="mb-0">{{ student_obj.student_number }} — {{ student_obj.user.get_full_name|default:student_obj.user.username }}</h5>
+      <div class="text-muted small">{% if student_obj.year_section %}{{ student_obj.year_section }} · {% endif %}{% if semester %}{{ semester }}{% else %}All semesters{% endif %}</div>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr><th>Event</th><th>Dates</th><th class="text-end">Missed slots</th><th class="text-end">Fine</th>
+            <th class="text-end">Paid</th><th class="text-end">Balance</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for f in statement.fines %}
+          <tr>
+            <td>{{ f.event.name }}</td>
+            <td class="text-nowrap">{{ f.event.start_date|date:"M d" }}{% if f.event.end_date != f.event.start_date %} – {{ f.event.end_date|date:"M d" }}{% endif %}, {{ f.event.end_date|date:"Y" }}</td>
+            <td class="text-end">{{ f.missed_slots }}</td>
+            <td class="text-end">₱{{ f.amount }}</td>
+            <td class="text-end">₱{{ f.amount_paid }}</td>
+            <td class="text-end">{% if f.status == 'PAID' %}₱0.00{% else %}₱{{ f.balance }}{% endif %}</td>
+            <td>
+              {% if f.status == 'PAID' %}<span class="badge text-bg-success">Paid</span>
+              {% elif f.amount_paid %}<span class="badge text-bg-warning">Part-paid</span>
+              {% else %}<span class="badge text-bg-danger">Unpaid</span>{% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="text-center text-muted py-4">No fines for this student{% if semester %} in {{ semester }}{% endif %}.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if statement.fines %}
+        <tfoot>
+          <tr class="fw-bold">
+            <td colspan="3" class="text-end">Total</td>
+            <td class="text-end">₱{{ statement.amount }}</td>
+            <td class="text-end">₱{{ statement.paid }}</td>
+            <td class="text-end">₱{{ statement.balance }}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      {% endif %}
+    </table>
   </div>
 {% else %}
   <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">

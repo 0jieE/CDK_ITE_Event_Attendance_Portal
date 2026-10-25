@@ -293,10 +293,15 @@ A student's fine is the sum of each missed slot's day rate; changing a rate reco
 (paid fines are never overwritten - they are flagged for review).
 
 #### Fines page (`/portal/fines/`)
-Two toggle views plus the calculate/mark-paid workflow:
+Two toggle views plus the calculate/mark-paid workflow. Both have a **Semester** filter (default: the
+active semester; it also narrows the event list), a **Print** button (ITE-logo header with the
+filters, then only the table; paid/pay buttons are not printed) and the student pickers are
+**search-as-you-type** (Tom Select) - also on the Attendance Logs *By Student* tab.
 * **By Event** (default) — the fines ledger; filter by event / status / **year** / **section**;
   **Calculate Fines** (pick event → `compute_fines_for_event`) and per-row **Mark Paid**.
-* **By Student** — pick a student **and** an event to see that student's **daily
+* **By Student** — pick a student. With **All events** you get a **statement** (every fine of the
+  student in the semester with paid / balance and a total) - print it to hand a copy to the student. Pick an
+  event instead to see that student's **daily
   attendance grid**: one row per event-day with AM-IN / AM-OUT / PM-IN / PM-OUT
   columns — `–` when the slot isn't required, **Absent** when no scan exists,
   else **Present** — plus the computed fine. Each **Absent** cell has a **Pay ₱x** button so the

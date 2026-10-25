@@ -28,7 +28,7 @@
   <div class="card-body">
     <form class="row g-2 mb-3 no-print" method="get" id="logsFilters" onchange="this.submit()">
       <input type="hidden" name="tab" value="{{ tab }}">
-      <div class="col-12 col-md-3">
+      <div class="col-12 col-md-4">
         <label class="form-label small mb-1">Semester</label>
         <select name="semester" class="form-select form-select-sm">
           <option value="" {% if not filters.semester %}selected{% endif %}>All semesters</option>
@@ -38,9 +38,9 @@
         </select>
       </div>
       {% if tab == 'student' %}
-        <div class="col-12 col-md-4">
+        <div class="col-12 col-md-3">
           <label class="form-label small mb-1">Student</label>
-          <select name="student" class="form-select form-select-sm">
+          <select name="student" class="form-select form-select-sm searchable-select" data-placeholder="Search student no. or name&hellip;">
             <option value="">Select a student&hellip;</option>
             {% for s in students %}
               <option value="{{ s.id }}" {% if filters.student == s.id|stringformat:'s' %}selected{% endif %}>{{ s.student_number }} &mdash; {{ s.user.get_full_name|default:s.user.username }}</option>

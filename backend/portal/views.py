@@ -7,6 +7,7 @@ duplicated here.
 
 import csv
 import datetime
+from decimal import Decimal
 import logging
 
 from django.conf import settings
@@ -448,36 +449,72 @@ def _build_attendance_grid(student, event, fine=None):
 
 @admin_required
 def fines_view(request):
-    """Fines ledger. Two views: ``event`` (default ledger) and ``student``
-    (daily attendance detail for one chosen student + event)."""
+    """Fines page: the ledger (*By Event*) or one student's detail / statement (*By Student*).
+
+    The semester filter (default: the active semester) applies to both views and narrows
+    the event choices. Both are printable (logo header + the table only).
+    """
     services.refresh_active_fines()  # keep fines current (rate-limited)
     view = "student" if request.GET.get("view") == "student" else "event"
     partial = is_htmx(request) and request.GET.get("partial") == "table"
+    semester = _logs_semester(request)
+
+    events = Event.objects.select_related("semester__school_year").order_by("-start_date", "name")
+    if semester:
+        events = events.filter(semester=semester)
+    f_event = request.GET.get("event") or ""
+    event = events.filter(pk=f_event).first() if f_event.isdigit() else None   # must be in the semester
 
     base = {
         "active": "fines",
         "view": view,
-        "events": Event.objects.all(),
+        "semester": semester,
+        "semesters": Semester.objects.select_related("school_year").order_by("-school_year__sy", "name"),
+        "events": events,
         "statuses": Fine.Status.choices,
         "year_levels": Student.YearLevel.choices,
         "sections": _distinct_sections(),
-        "students": Student.objects.select_related("user").all(),
+        "students": Student.objects.select_related("user").order_by("user__last_name", "user__first_name"),
     }
+    semester_id = str(semester.pk) if semester else ""
+    semester_label = str(semester) if semester else "All semesters"
 
     if view == "student":
         f_student = request.GET.get("student") or ""
-        f_event = request.GET.get("event") or ""
-        student = Student.objects.select_related("user").filter(pk=f_student).first() if f_student else None
-        event = Event.objects.filter(pk=f_event).first() if f_event else None
-        fine = (
-            Fine.objects.filter(student=student, event=event).first()
-            if student and event else None
+        student = (
+            Student.objects.select_related("user").filter(pk=f_student).first()
+            if f_student.isdigit() else None
         )
+        fine = Fine.objects.filter(student=student, event=event).first() if student and event else None
         grid = _build_attendance_grid(student, event, fine) if student and event else None
+        statement = None
+        if student and not event:
+            fines = list(
+                Fine.objects.filter(student=student, event__in=events)
+                .select_related("event__semester__school_year").order_by("-event__start_date")
+            )
+            statement = {
+                "fines": fines,
+                "amount": sum((f.amount for f in fines), Decimal("0")),
+                "paid": sum((f.amount_paid for f in fines), Decimal("0")),
+            }
+            statement["balance"] = sum((f.balance for f in fines if f.status != Fine.Status.PAID), Decimal("0"))
+        subtitle = ""
+        if student:
+            bits = [student.student_number, student.year_section]
+            if event:
+                span = f"{event.start_date:%b %d}" + (f" – {event.end_date:%b %d, %Y}" if event.end_date != event.start_date else f", {event.start_date:%Y}")
+                bits += [event.name, span]
+            else:
+                bits += [f"Fines statement · {semester_label}"]
+            subtitle = " · ".join(b for b in bits if b)
         base.update({
-            "filters": {"student": f_student, "event": f_event},
+            "filters": {"student": str(student.pk) if student else "", "event": str(event.pk) if event else "",
+                        "semester": semester_id},
             "student_obj": student, "event_obj": event,
-            "grid": grid, "fine": fine,
+            "grid": grid, "fine": fine, "statement": statement,
+            "print_title": (student.user.get_full_name() or student.user.username) if student else "Fines",
+            "print_subtitle": subtitle,
         })
         template = "portal/fines/partials/by_student.html" if partial else "portal/fines/list.html"
         return render(request, template, base)
@@ -485,22 +522,35 @@ def fines_view(request):
     # --- By Event (ledger) ---
     qs = Fine.objects.select_related("student__user", "event", "recorded_by")
     f_status = request.GET.get("status") or ""
-    f_event = request.GET.get("event") or ""
     f_year = request.GET.get("year_level") or ""
     f_section = request.GET.get("section") or ""
-    if f_status:
+    if semester:
+        qs = qs.filter(event__semester=semester)
+    if f_status in Fine.Status.values:
         qs = qs.filter(status=f_status)
-    if f_event:
-        qs = qs.filter(event_id=f_event)
+    else:
+        f_status = ""
+    if event:
+        qs = qs.filter(event=event)
     if f_year:
         qs = qs.filter(student__year_level=f_year)
     if f_section:
         qs = qs.filter(student__section=f_section)
 
+    bits = [semester_label, event.name if event else "All events"]
+    if f_status:
+        bits.append(dict(Fine.Status.choices)[f_status])
+    if f_year:
+        bits.append(dict(Student.YearLevel.choices).get(f_year, f_year))
+    if f_section:
+        bits.append(f"Section {f_section}")
     base.update({
         "objects": qs,
-        "filters": {"status": f_status, "event": f_event,
-                    "year_level": f_year, "section": f_section},
+        "filters": {"status": f_status, "event": str(event.pk) if event else "",
+                    "year_level": f_year, "section": f_section, "semester": semester_id},
+        "event_obj": event,
+        "print_title": f"Fines — {event.name}" if event else "Fines",
+        "print_subtitle": " · ".join(bits),
     })
     template = "portal/fines/partials/table.html" if partial else "portal/fines/list.html"
     return render(request, template, base)
