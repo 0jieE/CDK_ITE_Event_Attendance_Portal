@@ -59,6 +59,8 @@ Department Adviser, who gives each student a username and password.
 - **Profile:** change photo (camera/gallery), name, username and password.
 - **Theme:** Material 3 in the ITE brand green `#41B422` (light only).
 - Loading / error (retry) / empty states and pull-to-refresh on every data screen.
+- **In-app updates** from GitHub Releases (dialog, verified download, Android installer):
+  see [AUTO_UPDATE_SETUP.md](AUTO_UPDATE_SETUP.md) for the release steps.
 
 ## Offline sign-in
 A student who has signed in **online** on a phone can later sign in on that phone with **no

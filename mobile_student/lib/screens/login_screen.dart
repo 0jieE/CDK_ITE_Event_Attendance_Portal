@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/auth_provider.dart';
 import '../services/connectivity_service.dart';
 import '../theme/app_theme.dart';
+import '../update/update_ui.dart';
 import '../widgets/state_message.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -180,6 +181,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ],
                           ),
+                          const Center(child: UpdateAvailableButton()),
                         ],
                       ),
                     ),

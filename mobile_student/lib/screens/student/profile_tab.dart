@@ -10,6 +10,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/errors.dart';
 import '../../utils/image_type.dart';
 import '../../utils/validators.dart';
+import '../../update/update_ui.dart';
 import '../../widgets/logout_action.dart';
 import '../../widgets/profile_avatar.dart';
 import '../../widgets/state_message.dart';
@@ -433,6 +434,8 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
             ),
           ),
+          const SizedBox(height: 8),
+          const CheckForUpdatesTile(),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(

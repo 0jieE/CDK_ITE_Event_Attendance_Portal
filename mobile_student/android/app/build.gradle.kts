@@ -41,7 +41,6 @@ android {
         applicationId = "ph.edu.cok.ite_attendance"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // mobile_scanner 7.x (CameraX) requires minSdk 23.
         minSdk = maxOf(23, flutter.minSdkVersion)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -71,4 +70,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // FileProvider, for handing downloaded updates to the installer.
+    implementation("androidx.core:core-ktx:1.13.1")
 }

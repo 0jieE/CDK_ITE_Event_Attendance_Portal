@@ -9,6 +9,8 @@ import 'services/connectivity_service.dart';
 import 'services/offline_credentials.dart';
 import 'services/offline_prefetch.dart';
 import 'theme/app_theme.dart';
+import 'update/update_service.dart';
+import 'update/update_ui.dart';
 
 void main() {
   runApp(const IteStudentsApp());
@@ -53,16 +55,21 @@ class IteStudentsApp extends StatelessWidget {
         ProxyProvider<AuthProvider, ApiService>(
           update: (_, auth, _) => auth.api,
         ),
+        // In-app updates from GitHub Releases (see AUTO_UPDATE_SETUP.md).
+        ChangeNotifierProvider(create: (_) => UpdateService()),
       ],
       // Downloads the student's data for offline use whenever online.
       child: OfflinePrefetcher(
-        child: MaterialApp(
-          title: 'ITE Students',
-          debugShowCheckedModeBanner: false,
-          // Always the light + green look, even when the phone is in dark mode.
-          theme: AppTheme.light,
-          themeMode: AppTheme.themeMode,
-          home: const RootRouter(),
+        // Checks GitHub for a newer release after start-up and on resume.
+        child: UpdateChecker(
+          child: MaterialApp(
+            title: 'ITE Students',
+            debugShowCheckedModeBanner: false,
+            // Always the light + green look, even when the phone is in dark mode.
+            theme: AppTheme.light,
+            themeMode: AppTheme.themeMode,
+            home: const RootRouter(),
+          ),
         ),
       ),
     );
