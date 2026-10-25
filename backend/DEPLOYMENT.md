@@ -1,10 +1,10 @@
 # Deployment guide
 
 How to run the QR Attendance & Financial Management backend (Django + Gunicorn +
-PostgreSQL + nginx) with Docker, and how to point the Flutter app at it.
+PostgreSQL + nginx) with Docker, and how to point the two Flutter apps (ITE Students, ITE Instructors) at it.
 
 ```
- phone (Flutter APK) ─┐
+ phones (Flutter APKs) ─┐
  browser (/portal/)  ─┴─►  nginx :80/:443 ──► web (Gunicorn :8000, Django) ──► db (PostgreSQL)
                             │  serves /static/ and /media/ from shared volumes
 ```
@@ -14,7 +14,7 @@ PostgreSQL + nginx) with Docker, and how to point the Flutter app at it.
 - Docker Engine 24+ with the Compose v2 plugin (`docker compose version`).
 - A machine reachable by the phones/browsers (a VPS, or a laptop on the same Wi-Fi
   for the defense demo) and, for HTTPS, a domain name.
-- For the app: Flutter SDK + Android SDK/JDK 17 (only on the machine that builds the APK).
+- For the apps: Flutter SDK + Android SDK/JDK 17 (only on the machine that builds the APKs).
 
 ## 2. First run
 
@@ -195,14 +195,17 @@ Only do this if nginx is reachable *only* through that terminator.
 > match the exact origin (scheme + host + port) you type in the browser.
 > HSTS is cached by browsers: keep `SECURE_HSTS_SECONDS` small while testing.
 
-## 7. Flutter release APK
+## 7. Flutter release APKs (ITE Students + ITE Instructors)
 
 The API address is a **build-time constant**: `--dart-define=API_BASE_URL=<origin>`
-(see `mobile/lib/config/api_config.dart`). Use the origin only - no trailing slash,
+(see `lib/config/api_config.dart` in each app). Use the origin only - no trailing slash,
 no `/api`. With no define it keeps the dev default so `flutter run` still works.
 
+There are two apps, built the same way - **`mobile_student/`** (students) and **`mobile_instructor/`**
+(instructors, QR scanning). They have different Android IDs, so both can be installed on one phone.
+
 ```bash
-cd mobile
+cd mobile_student            # then repeat for mobile_instructor
 flutter pub get
 
 # HTTPS server (recommended)
@@ -212,17 +215,18 @@ flutter build apk --release --dart-define=API_BASE_URL=https://attendance.exampl
 flutter build apk --release --dart-define=API_BASE_URL=http://192.168.1.20
 ```
 
-Output: `mobile/build/app/outputs/flutter-apk/app-release.apk` - copy it to the phones
-and install it (enable "install unknown apps").
+Output: `<app>/build/app/outputs/flutter-apk/app-release.apk` - copy it to the phones
+and install it (enable "install unknown apps"). An instructor account is refused by the student app
+and a student account by the instructor app.
 
 - **Cleartext is derived from the URL you bake in.** An `https://` build blocks plain
   HTTP at the OS level (the secure default); an `http://` build sets
-  `usesCleartextTraffic="true"` automatically (see `mobile/android/app/build.gradle.kts`).
+  `usesCleartextTraffic="true"` automatically (see `android/app/build.gradle.kts` in each app).
   Debug/profile builds always allow it. If a device shows "Cleartext HTTP traffic not
   permitted", the APK was built for an `https://` URL but the server is plain HTTP -
   rebuild with the right `API_BASE_URL`.
 - The APK is currently signed with the **debug key** (fine for a demo). For a real
-  distribution create a keystore and a `signingConfig` in `mobile/android/app/build.gradle.kts`.
+  distribution create a keystore and a `signingConfig` in each app's `android/app/build.gradle.kts` (never commit the keystore).
 - The device must be able to reach the host (same Wi-Fi for a LAN demo; open the
   firewall port 80/443 on the host).
 - Mobile apps are not subject to CORS; `CORS_ALLOWED_ORIGINS` only matters for browser clients.
@@ -257,7 +261,7 @@ Render reads [`render.yaml`](../render.yaml) and asks for the values marked *syn
 `https://<service>.onrender.com/healthz/` -> `{"status": "ok", "database": "ok"}`, then sign in
 at `/portal/login/` as `adviser` (or your `ADMIN_USERNAME`).
 
-**5. Point the app at it** (`https://` so cleartext stays blocked):
+**5. Point the apps at it** (`https://` so cleartext stays blocked; run in `mobile_student/` and `mobile_instructor/`):
 ```bash
 flutter build apk --release --dart-define=API_BASE_URL=https://<service>.onrender.com
 ```

@@ -15,3 +15,6 @@ Thumbs.db
 
 # Private credentials file - never commit
 CREDENTIALS*
+
+# database backups (personal data + password hashes)
+ite-attendance-backup-*.json

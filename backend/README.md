@@ -23,8 +23,9 @@ PostgreSQL 13 · drf-spectacular.
 > (`python -m venv env`) and `pip install -r requirements.txt`.
 
 > **Status: feature-complete and deployable.** Data models + RBAC + admin REST APIs,
-> the server-rendered admin portal, the instructor/student mobile APIs, the Flutter app
-> (`../mobile`), Docker/Render deployment and a security-hardening pass are all done.
+> the server-rendered adviser portal (installable, works offline), the instructor/student mobile APIs, the two
+> Flutter apps (`../mobile_student` = ITE Students, `../mobile_instructor` = ITE Instructors),
+> Docker/Render deployment and a security-hardening pass are all done.
 > Jump to: [Deploy on Render](#deploy-on-render) · [Docker](#deployment-docker) ·
 > [Security](SECURITY.md) · [Tests](#tests).
 
@@ -45,7 +46,9 @@ backend/
   manage.py, requirements.txt
   .env          # local dev secrets (NOT committed) - copy from .env.example
   .env.prod     # Docker/prod secrets (NOT committed) - copy from .env.prod.example
-../mobile/      # Flutter app (instructor + student)
+../mobile_student/     # Flutter app "ITE Students"
+../mobile_instructor/  # Flutter app "ITE Instructors" (QR scanning)
+../mobile/             # earlier combined app (reference)
 ../render.yaml  # Render blueprint
 ```
 
@@ -185,7 +188,7 @@ student a username and password:
 |------|-------|-------|
 | Super Admin (`is_superuser`) | portal **and** `/admin/` (Django Administration) | created by `seed_superadmin` / `SUPERADMIN_*`; the **only** role that can create an adviser or another Super Admin (Django Administration -> Users, or `/api/users/`) |
 | Department Adviser (`is_admin`) | **portal only** | `seed_admin`; never `is_staff`, so `/admin/` rejects them. There is **no Users page** in the portal, so an adviser cannot create another adviser |
-| Instructor / Student | mobile app | created by the adviser on the Instructors / Students pages (an Instructor profile is always created with the user) |
+| Instructor / Student | ITE Instructors / ITE Students app | created by the adviser on the Instructors / Students pages (an Instructor profile is always created with the user) |
 
 ### Mobile / system endpoints
 
@@ -221,7 +224,7 @@ Cloudinary and the database is Render PostgreSQL. Short version:
    `ADMIN_PASSWORD` and the three `CLOUDINARY_*` values.
 3. Deploy. The container migrates, collects static files, seeds the adviser and creates the
    Cloudinary folders on every start. Open `https://<service>.onrender.com/portal/login/`.
-4. Build the mobile APK against that URL:
+4. Build the two mobile APKs against that URL (from `mobile_student/` and `mobile_instructor/`):
    `flutter build apk --release --dart-define=API_BASE_URL=https://<service>.onrender.com`.
 
 Full walkthrough, free-tier caveats and troubleshooting: [DEPLOYMENT.md](DEPLOYMENT.md#deploy-on-render).
@@ -561,7 +564,7 @@ and the Cloudinary storage (the Cloudinary SDK is mocked, so no credentials are 
 All phases are **done**:
 * **Admin APIs, RBAC, fines calculator** — Phase 1.
 * **Admin web portal** (responsive, toggleable sidebar, ITE-green theme) — Phase 2.
-* **Mobile APIs** + **Flutter app** (`../mobile`, instructor + student, profile photos) — Phase 3.
+* **Mobile APIs** + **Flutter apps** (`../mobile_student` and `../mobile_instructor`, profile photos, offline sign-in and data) — Phase 3.
 * **Deployment & hardening** (Docker, Render, throttling, HTTPS switch, `SECURITY.md`) — Phase 4.
 
 Possible future work: per-date scan windows (currently one schedule per event); an in-app photo-upload
