@@ -308,11 +308,14 @@ The portal is designed phone-first (`portal/static/portal/css/mobile.css`, `js/m
   zoom) and every control is at least 44 px tall.
 * **Native feel** - safe-area insets (notch / home indicator), `100dvh`, no tap delay, no overscroll bounce,
   reduced-motion respected. Printing is untouched (all of this is `@media screen`).
-* **PWA groundwork** - `GET /portal/manifest.webmanifest` (public; name/colours follow the Settings page),
-  192/512 and maskable icons, Apple touch icon and meta tags, `standalone` display and home-screen shortcuts.
-  The portal can already be added to the home screen. **Next steps for a full PWA:** a service worker served
-  from `/portal/sw.js` (offline shell + cache of static assets only - never cache authenticated pages),
-  an offline fallback page, and optionally web-push.
+* **Installable app** - `GET /portal/manifest.webmanifest` (public; name/colours follow the Settings page),
+  192/512 and maskable icons, Apple touch icon, `standalone` display and home-screen shortcuts, plus a
+  **service worker** (`/portal/sw.js`, scope `/portal/`). The worker **caches nothing** (logged-in pages hold
+  personal data) - it only makes the portal installable and shows an offline page when the network is down.
+  An **Install app** button (account menu, and the phone drawer) triggers the browser's native install
+  prompt on Chrome/Edge/Android and opens a short how-to on iPhone/Safari and other browsers; it hides itself
+  once the portal runs as an installed app. **Possible next steps:** cache static assets for faster starts,
+  an offline read-only mode for non-sensitive pages, and web-push.
 
 ### Where each section lives (all under `/portal/`)
 | Section | URL | Notes |

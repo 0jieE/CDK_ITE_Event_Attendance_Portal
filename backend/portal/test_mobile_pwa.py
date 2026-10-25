@@ -102,3 +102,39 @@ class MobileShellTests(TestCase):
         self.assertIn("attr(data-label)", css)
         for feature in ("touchstart", "inert", "data-label", "chrome-hidden", "filters-toggle"):
             self.assertIn(feature, js, feature)
+
+
+class InstallAppTests(TestCase):
+    def test_service_worker_is_public_scoped_and_never_caches(self):
+        res = self.client.get(reverse("portal:sw"))
+        self.assertEqual(res.status_code, 200)                                  # anonymous: browsers fetch it without a session
+        self.assertTrue(res["Content-Type"].startswith("application/javascript"))
+        self.assertEqual(res["Service-Worker-Allowed"], "/portal/")
+        self.assertIn("no-cache", res["Cache-Control"])
+        js = res.content.decode()
+        self.assertIn("addEventListener('fetch'", js)                           # what makes it installable
+        self.assertIn("You're offline", js)
+        for forbidden in ("caches.open", "cache.put", "cache.add", "addAll(", "caches.match"):
+            self.assertNotIn(forbidden, js, forbidden)                          # logged-in pages must never be stored
+
+    def test_pages_register_the_worker_and_offer_install_buttons(self):
+        User.objects.create_user("adviser", password=PW, is_admin=True)
+        self.client.login(username="adviser", password=PW)
+        html = self.client.get(reverse("portal:dashboard")).content.decode()
+        self.assertIn('name="sw-url" content="/portal/sw.js"', html)
+        self.assertIn("portal/js/pwa.js", html)
+        self.assertEqual(html.count("data-install-app"), 2)                     # account menu + phone drawer
+        self.assertEqual(len(re.findall(r"data-install-app\s+hidden", html)), 2)   # hidden until the browser says it can
+        self.assertIn('id="installHelp"', html)
+        for platform in ("ios", "android", "desktop"):
+            self.assertIn(f'data-platform="{platform}"', html)
+        self.client.logout()
+        login = self.client.get(reverse("portal:login")).content.decode()
+        self.assertIn("portal/js/pwa.js", login)
+        self.assertIn("/portal/sw.js", login)
+
+    def test_install_script_logic(self):
+        js = open(finders.find("portal/js/pwa.js"), encoding="utf-8").read()
+        for needle in ("beforeinstallprompt", "appinstalled", "display-mode: standalone", "navigator.standalone",
+                       "serviceWorker.register", "userChoice"):
+            self.assertIn(needle, js, needle)

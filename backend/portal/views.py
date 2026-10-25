@@ -357,6 +357,19 @@ def manifest_view(request):
     return response
 
 
+def service_worker_view(request):
+    """The service worker (``/portal/sw.js``, scope ``/portal/``).
+
+    Served by Django, not as a static file, because a worker's scope is limited to the URL it is
+    served from. It caches nothing (see the template) - it only makes the portal installable and
+    shows an offline page. Never cached by the browser so updates are picked up straight away.
+    """
+    response = render(request, "portal/sw.js", content_type="application/javascript; charset=utf-8")
+    response["Service-Worker-Allowed"] = "/portal/"
+    response["Cache-Control"] = "no-cache, max-age=0"
+    return response
+
+
 @admin_required
 def attendance_logs_view(request):
     """Read-only attendance logs on two tabs: *By Event* and *By Student*.

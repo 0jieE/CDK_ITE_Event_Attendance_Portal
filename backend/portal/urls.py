@@ -10,6 +10,7 @@ urlpatterns = [
     path("", views.dashboard_view, name="dashboard"),
     path("login/", views.login_view, name="login"),
     path("manifest.webmanifest", views.manifest_view, name="manifest"),
+    path("sw.js", views.service_worker_view, name="sw"),
     path("logout/", views.logout_view, name="logout"),
     # Attendance logs (read-only)
     path("attendance_logs/", views.attendance_logs_view, name="attendance_logs-list"),

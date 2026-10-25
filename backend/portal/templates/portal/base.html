@@ -232,6 +232,7 @@
           <small>{% if request.user.is_superuser %}Super Admin{% else %}Department Adviser{% endif %}</small>
         </span>
       </div>
+      <button type="button" class="btn" data-install-app hidden><i class="bi bi-download me-1"></i> Install app</button>
       <a class="btn" href="{% url 'portal:logout' %}"><i class="bi bi-box-arrow-right me-1"></i> Log out</a>
     </div>
     <div class="sidebar-foot">Colegio de Kidapawan · ITE</div>
@@ -264,6 +265,7 @@
           {% endif %}
           <li><a class="dropdown-item" href="https://dbdiagram.io/d/Digital_clearance-69a0ec45a3f0aa31e13ec0e1" target="_blank" rel="noopener noreferrer"><i class="bi bi-diagram-3 me-2"></i>Database Schema <i class="bi bi-box-arrow-up-right ms-1 small text-muted"></i></a></li>
           <li><hr class="dropdown-divider"></li>
+          <li><button type="button" class="dropdown-item" data-install-app hidden><i class="bi bi-download me-2"></i>Install app</button></li>
           <li><a class="dropdown-item" href="{% url 'portal:logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
         </ul>
       </div>
@@ -529,5 +531,45 @@
   </script>
   {% block extra_js %}{% endblock %}
   <script src="{% static 'portal/js/mobile.js' %}"></script>
+  <script src="{% static 'portal/js/pwa.js' %}"></script>
+
+  <!-- How to install when the browser has no install prompt (iPhone, Firefox, ...) -->
+  <div class="modal fade" id="installHelp" tabindex="-1" aria-labelledby="installHelpTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="installHelpTitle"><i class="bi bi-download me-2"></i>Install {{ ui.brand_title }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small">Installing puts the portal on your home screen and opens it full-screen like an app.</p>
+          <details class="mb-2" data-platform="ios">
+            <summary class="fw-semibold">iPhone / iPad (Safari)</summary>
+            <ol class="mt-2 mb-0">
+              <li>Tap the <strong>Share</strong> button <i class="bi bi-box-arrow-up"></i> (bottom of the screen).</li>
+              <li>Scroll down and tap <strong>Add to Home Screen</strong> <i class="bi bi-plus-square"></i>.</li>
+              <li>Tap <strong>Add</strong>.</li>
+            </ol>
+          </details>
+          <details class="mb-2" data-platform="android">
+            <summary class="fw-semibold">Android (Chrome / Edge)</summary>
+            <ol class="mt-2 mb-0">
+              <li>Open the browser menu <strong>&#8942;</strong> (top right).</li>
+              <li>Tap <strong>Install app</strong> (or <strong>Add to Home screen</strong>).</li>
+              <li>Confirm with <strong>Install</strong>.</li>
+            </ol>
+          </details>
+          <details data-platform="desktop">
+            <summary class="fw-semibold">Computer (Chrome / Edge)</summary>
+            <ol class="mt-2 mb-0">
+              <li>Click the <strong>install</strong> icon <i class="bi bi-download"></i> at the right end of the address bar, or open the menu and choose <strong>Install ITE Attendance</strong>.</li>
+              <li>Click <strong>Install</strong>.</li>
+            </ol>
+          </details>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-primary" data-bs-dismiss="modal">Got it</button></div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
