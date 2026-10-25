@@ -145,30 +145,37 @@ img, svg, video, canvas { max-width: 100%; }
     border: 1px solid var(--line); border-radius: 1.1rem; background: var(--app-surface);
     box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 18px -14px rgba(0,0,0,.25);
   }
+  /* a cell is a block: the label floats left, the value (badges, text, buttons...) wraps on the right.
+     (A flex row made every badge a non-wrapping item and stretched the card past the screen.) */
   table.table:not(.no-stack) tr > * {
-    display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-width: 0;
+    display: block; min-width: 0; max-width: 100%; overflow: hidden;
     padding: .55rem 0 !important; border: 0 !important; border-bottom: 1px dashed var(--line) !important;
     text-align: right !important; white-space: normal !important; background: transparent !important; overflow-wrap: anywhere;
   }
   table.table:not(.no-stack) tr > *::before {
-    content: attr(data-label); flex: 0 0 34%; max-width: 40%; text-align: left;
+    content: attr(data-label); float: left; width: 36%; margin: .1rem .75rem 0 0; text-align: left;
     font-size: .68rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted);
   }
+  table.table:not(.no-stack) tr > * .badge { margin: 0 0 .2rem .25rem; }
+  table.table:not(.no-stack) tr > * .d-flex { justify-content: flex-end; }
+  table.table:not(.no-stack) tr > *::after { content: ""; display: block; clear: both; }
   table.table:not(.no-stack) tr > *:last-child { border-bottom: 0 !important; }
   /* first cell is the card title */
   table.table:not(.no-stack) tbody tr > *:first-child {
-    justify-content: flex-start; text-align: left !important; font-weight: 700; font-size: 1rem;
+    text-align: left !important; font-weight: 700; font-size: 1rem;
     border-bottom: 1px solid var(--line) !important; padding-bottom: .65rem !important;
   }
   table.table:not(.no-stack) tbody tr > *:first-child::before { display: none; }
   /* actions row sits at the bottom, buttons left-aligned and thumb-sized */
   table.table:not(.no-stack) td[data-label="Actions"], table.table:not(.no-stack) td[data-label="Action"] {
-    justify-content: flex-start; flex-wrap: wrap; gap: .5rem; padding-top: .7rem !important; border-top: 1px solid var(--line) !important; border-bottom: 0 !important;
+    display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: .5rem;
+    padding-top: .7rem !important; border-top: 1px solid var(--line) !important; border-bottom: 0 !important; overflow: visible;
   }
+  table.table:not(.no-stack) td[data-label="Actions"]::after, table.table:not(.no-stack) td[data-label="Action"]::after { display: none; }
   table.table:not(.no-stack) td[data-label="Actions"]::before, table.table:not(.no-stack) td[data-label="Action"]::before { display: none; }
   table.table:not(.no-stack) td[data-label="Actions"] .btn, table.table:not(.no-stack) td[data-label="Action"] .btn { min-height: 40px; min-width: 40px; }
   /* full-width cells (empty states, footers) and cells with nothing to show */
-  table.table:not(.no-stack) td[colspan] { justify-content: center; text-align: center !important; }
+  table.table:not(.no-stack) td[colspan] { text-align: center !important; }
   table.table:not(.no-stack) td[colspan]::before { display: none; }
   table.table:not(.no-stack) td.is-empty { display: none; }
   table.table:not(.no-stack) tfoot tr { background: rgba(var(--brand-rgb), .06); }
@@ -194,7 +201,7 @@ img, svg, video, canvas { max-width: 100%; }
   .ts-dropdown { font-size: 16px; }
   .ts-dropdown .option { padding: .7rem .85rem; }
   input[type="checkbox"].form-check-input, input[type="radio"].form-check-input { width: 1.35rem; height: 1.35rem; }
-  .form-check-input[role="switch"] { width: 2.6rem; height: 1.45rem; }
+  input[type="checkbox"].form-check-input[role="switch"] { width: 2.6rem; height: 1.45rem; }
   .choice-card { min-height: 48px; }
 
   /* modals slide up as a bottom sheet */

@@ -138,3 +138,24 @@ class InstallAppTests(TestCase):
         for needle in ("beforeinstallprompt", "appinstalled", "display-mode: standalone", "navigator.standalone",
                        "serviceWorker.register", "userChoice"):
             self.assertIn(needle, js, needle)
+
+
+class CardLayoutRegressionTests(TestCase):
+    """The Events page broke on phones: four slot badges in a flex-row cell could not wrap and
+    stretched the card past the screen (mobile browsers then zoom the whole page out)."""
+
+    def css(self):
+        return open(finders.find("portal/css/mobile.css"), encoding="utf-8").read()
+
+    def test_card_cells_wrap_their_content(self):
+        css = self.css()
+        start = css.index("table.table:not(.no-stack) tr > * {")
+        rule = css[start: css.index("}", start)]
+        self.assertIn("display: block", rule)
+        self.assertNotIn("display: flex", rule)                                 # flex made every badge a non-wrapping item
+        self.assertIn("overflow-wrap: anywhere", rule)
+        label = css[css.index("tr > *::before {"):]
+        self.assertIn("float: left", label[: label.index("}")])
+
+    def test_switch_keeps_its_pill_shape_on_phones(self):
+        self.assertIn('input[type="checkbox"].form-check-input[role="switch"] { width: 2.6rem', self.css())
