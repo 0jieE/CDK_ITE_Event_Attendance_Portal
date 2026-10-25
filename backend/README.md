@@ -48,7 +48,6 @@ backend/
   .env.prod     # Docker/prod secrets (NOT committed) - copy from .env.prod.example
 ../mobile_student/     # Flutter app "ITE Students"
 ../mobile_instructor/  # Flutter app "ITE Instructors" (QR scanning)
-../mobile/             # earlier combined app (reference)
 ../render.yaml  # Render blueprint
 ```
 

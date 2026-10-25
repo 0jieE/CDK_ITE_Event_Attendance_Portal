@@ -25,7 +25,6 @@ connection and syncs when it comes back.
 | Backend API + adviser web portal (PWA) | [`backend/`](backend) | Django 5.1, DRF, SimpleJWT, PostgreSQL, HTMX + Bootstrap 5, service worker |
 | Student mobile app — "ITE Students" | [`mobile_student/`](mobile_student) | Flutter, `qr_flutter` |
 | Instructor mobile app — "ITE Instructors" (QR scanning) | [`mobile_instructor/`](mobile_instructor) | Flutter, `mobile_scanner` |
-| Earlier combined app (instructor + student) | [`mobile/`](mobile) | Flutter — superseded by the two apps above, kept for reference |
 | Deployment | [`render.yaml`](render.yaml), [`backend/docker-compose.yml`](backend/docker-compose.yml) | Docker, Gunicorn, nginx / WhiteNoise, Render |
 
 The two mobile apps share the same API and have different Android IDs
@@ -116,7 +115,6 @@ once online (it saves its pages for offline use); install both apps and sign in 
 | [`backend/docs/database.dbml`](backend/docs/database.dbml) | Data schema for dbdiagram.io |
 | [`mobile_student/README.md`](mobile_student/README.md) | Student app: features, offline sign-in & data, structure |
 | [`mobile_instructor/README.md`](mobile_instructor/README.md) | Instructor app: scanning, offline scanning & sign-in, structure |
-| [`mobile/README.md`](mobile/README.md) | The earlier combined app (reference) |
 
 ## Secrets
 
