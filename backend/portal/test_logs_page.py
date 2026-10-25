@@ -205,3 +205,39 @@ class SemesterFormActivationTests(TestCase):
         first.refresh_from_db()
         self.assertFalse(first.is_active)
         self.assertEqual(Semester.current().name, "2nd")
+
+
+class PrintLayoutTests(TestCase):
+    """Reports and logs print with a logo header and tables that fit the page."""
+
+    def setUp(self):
+        User.objects.create_user("adviser", password=PW, is_admin=True)
+        self.client.login(username="adviser", password=PW)
+        sy = SchoolYear.objects.create(sy="2026-2027")
+        self.sem = Semester.objects.create(school_year=sy, name="1st")
+        self.event = mk_event(self.sem, "Print Fair")
+
+    def test_reports_have_a_printed_header_with_the_filters(self):
+        for name, title in (("portal:reports-attendance", "Attendance Report"),
+                            ("portal:reports-financial", "Financial Report")):
+            html = self.client.get(reverse(name), {"semester": self.sem.pk, "event": self.event.pk}).content.decode()
+            head = html[html.index('class="print-head"'):]
+            head = head[: head.index("Printed")]
+            self.assertIn("ite-logo", head)
+            self.assertIn(title, head)
+            self.assertIn("2026-2027 1st", head)
+            self.assertIn("Print Fair", head)
+            self.assertIn('class="page-head no-print"', html)           # no duplicate on-screen title in print
+        html = self.client.get(reverse("portal:reports-financial"), {"semester": "x", "event": "y"}).content.decode()
+        self.assertIn("All semesters", html)                             # junk filters never crash
+
+    def test_print_css_fits_tables_to_the_page(self):
+        html = self.client.get(reverse("portal:reports-attendance")).content.decode()
+        for rule in ("@page { size: A4; margin: 12mm; }", "table-layout: auto", "table-header-group",
+                     "overflow: visible !important; margin: 0 !important"):
+            self.assertIn(rule, html)
+
+    def test_log_rows_keep_dates_on_one_line(self):
+        mk_log(mk_student(1), self.event)
+        html = self.client.get(reverse("portal:attendance_logs-list")).content.decode()
+        self.assertGreaterEqual(html.count('class="text-nowrap"'), 3)

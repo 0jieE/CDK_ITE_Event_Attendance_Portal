@@ -343,9 +343,31 @@ def attendance_logs_view(request):
         name = event_obj.name if event_obj else (student_obj.student_number if student_obj else "logs")
         return _csv_response(rows, f"attendance_logs_{tab}_{slugify(name)}.csv")
 
+    if tab == "event":
+        print_title = event_obj.name if event_obj else "Attendance Logs"
+        if event_obj:
+            span = f"{event_obj.start_date:%b %d, %Y}"
+            if event_obj.end_date != event_obj.start_date:
+                span += f" – {event_obj.end_date:%b %d, %Y}"
+            print_subtitle = f"{event_obj.semester} · {span}"
+        else:
+            print_subtitle = ""
+        if f_section:
+            print_subtitle += f" · Section {f_section}"
+    else:
+        print_title = (student_obj.user.get_full_name() or student_obj.user.username) if student_obj else "Attendance Logs"
+        print_subtitle = ""
+        if student_obj:
+            bits = [student_obj.student_number, student_obj.year_section, str(semester) if semester else "All semesters"]
+            if f_event:
+                bits.append(events.filter(pk=f_event).values_list("name", flat=True).first() or "")
+            print_subtitle = " · ".join(b for b in bits if b)
+
     context = {
         "active": "attendance_logs",
         "tab": tab,
+        "print_title": print_title,
+        "print_subtitle": print_subtitle,
         "objects": qs,
         "semester": semester,
         "semesters": Semester.objects.select_related("school_year").order_by("-school_year__sy", "name"),
@@ -601,12 +623,24 @@ def fines_unpay_slot_view(request, pk):
 # Reports (Attendance & Financial) — filters + CSV + print
 # ---------------------------------------------------------------------------
 def _report_filters(request):
-    """Pull shared report filters from the querystring."""
+    """Pull shared report filters from the querystring (malformed values are ignored)."""
+
+    def _id(name):
+        raw = request.GET.get(name) or ""
+        return raw if raw.isdigit() else None
+
+    def _day(name):
+        raw = request.GET.get(name) or ""
+        try:
+            return datetime.date.fromisoformat(raw).isoformat()
+        except ValueError:
+            return None
+
     return {
-        "semester": request.GET.get("semester") or None,
-        "event": request.GET.get("event") or None,
-        "date_from": request.GET.get("date_from") or None,
-        "date_to": request.GET.get("date_to") or None,
+        "semester": _id("semester"),
+        "event": _id("event"),
+        "date_from": _day("date_from"),
+        "date_to": _day("date_to"),
     }
 
 
@@ -620,13 +654,28 @@ def _csv_response(rows, filename):
     return response
 
 
+def _report_print_subtitle(filters):
+    """Human-readable filters for the printed report header."""
+    parts = []
+    semester = Semester.objects.select_related("school_year").filter(pk=filters["semester"]).first() if str(filters.get("semester") or "").isdigit() else None
+    parts.append(str(semester) if semester else "All semesters")
+    event = Event.objects.filter(pk=filters["event"]).first() if str(filters.get("event") or "").isdigit() else None
+    if event:
+        parts.append(event.name)
+    if filters.get("date_from") or filters.get("date_to"):
+        parts.append(f"{filters.get('date_from') or '…'} to {filters.get('date_to') or '…'}")
+    return " · ".join(parts)
+
+
 def _report_context(request, active):
+    filters = _report_filters(request)
     return {
         "active": f"reports_{active}",
         "report": active,
         "semesters": Semester.objects.select_related("school_year").all(),
         "events": Event.objects.all(),
-        "filters": _report_filters(request),
+        "filters": filters,
+        "print_subtitle": _report_print_subtitle(filters),
     }
 
 

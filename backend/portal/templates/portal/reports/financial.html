@@ -3,7 +3,7 @@
 {% block page_title %}Financial Report{% endblock %}
 
 {% block content %}
-<div class="page-head">
+<div class="page-head no-print">
   <h2 class="page-title">Financial Report</h2>
   <div class="btn-group btn-group-sm no-print" role="group" aria-label="Report type">
     <a href="{% url 'portal:reports-attendance' %}" class="btn {% if report == 'attendance' %}btn-primary{% else %}btn-outline-primary{% endif %}">Attendance</a>
@@ -15,7 +15,7 @@
   <div class="card-body">
     {% include "portal/reports/partials/filters.html" with action_url=request.path %}
 
-    <h5 class="d-none d-print-block">Financial Report</h5>
+    {% include "portal/partials/print_head.html" with title="Financial Report" subtitle=print_subtitle %}
     <div class="table-responsive">
       <table class="table table-sm table-striped align-middle">
         <thead>

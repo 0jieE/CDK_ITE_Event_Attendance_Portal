@@ -1,0 +1,12 @@
+{% load static %}{% comment %}
+Printed page header (hidden on screen): ITE logo, a title, an optional subtitle and the print date.
+Usage: {% include "portal/partials/print_head.html" with title="Attendance Report" subtitle=print_subtitle %}
+{% endcomment %}
+<div class="print-head">
+  <img src="{% if ui.logo_url %}{{ ui.logo_url }}{% else %}{% static 'portal/img/ite-logo.png' %}{% endif %}" alt="ITE logo">
+  <div>
+    <h3>{{ title }}</h3>
+    {% if subtitle %}<div class="print-sub">{{ subtitle }}</div>{% endif %}
+  </div>
+  <div class="print-date">Printed {% now "M d, Y g:i A" %}</div>
+</div>

@@ -114,12 +114,44 @@
       html[data-sidebar-open] body { overflow: hidden; }
     }
 
+    /* ---- Printing: every table must fit the page and read well on paper ---- */
+    .print-head { display: none; }
+    @page { size: A4; margin: 12mm; }
     @media print {
       .sidebar, .topbar, .no-print, .sidebar-backdrop { display: none !important; }
+      html, body { background: #fff !important; color: #111; font-size: 10pt; }
       .content { margin-left: 0 !important; transition: none !important; }
-      .portal-main { padding: 0; max-width: none; }
-      .card { box-shadow: none; border: 0; }
+      .portal-main { padding: 0 !important; max-width: none !important; }
+      .card { box-shadow: none !important; border: 0 !important; background: #fff !important; }
+      .card-body { padding: 0 !important; }
       a[href]:after { content: ""; }
+      /* wide tables shrink to the page instead of being cut off / scrolling */
+      .table-responsive { overflow: visible !important; margin: 0 !important; padding: 0 !important; width: 100% !important; }
+      table.table { width: 100% !important; table-layout: auto; font-size: 9pt; margin: 0; }
+      table.table th, table.table td {
+        padding: .28rem .4rem !important; overflow-wrap: anywhere;
+        vertical-align: top; color: #111 !important; background: transparent !important;
+        border-bottom: 1px solid #bbb !important;
+      }
+      table.table thead th { border-bottom: 2px solid #333 !important; text-transform: none; letter-spacing: 0; font-size: 8.5pt; }
+      table.table-striped > tbody > tr:nth-of-type(even) > * { background: #f3f3f3 !important; }
+      table.table th:not(.text-nowrap), table.table td:not(.text-nowrap) { white-space: normal !important; }
+      thead { display: table-header-group; }          /* repeat the header on every page */
+      tr { page-break-inside: avoid; }
+      .dataTables_length, .dataTables_filter, .dataTables_info, .dataTables_paginate { display: none !important; }
+      .dataTables_wrapper > .row:first-child, .dataTables_wrapper > .row:last-child { display: none !important; }
+      table.dataTable thead .sorting:before, table.dataTable thead .sorting:after,
+      table.dataTable thead .sorting_asc:before, table.dataTable thead .sorting_asc:after,
+      table.dataTable thead .sorting_desc:before, table.dataTable thead .sorting_desc:after { display: none !important; }
+      /* badges lose their coloured background on paper: keep them readable */
+      .badge { color: #111 !important; background: transparent !important; border: 1px solid #555; font-weight: 600; }
+      .text-success, .text-danger, .text-muted { color: #111 !important; }
+      /* printed report header: ITE logo + title (+ filters, print date) */
+      .print-head { display: flex; align-items: center; gap: .9rem; border-bottom: 2px solid #111; padding-bottom: .6rem; margin-bottom: .9rem; color: #111; }
+      .print-head img { width: 60px; height: 60px; object-fit: contain; }
+      .print-head h3 { margin: 0; font-size: 1.3rem; font-weight: 700; }
+      .print-head .print-sub { font-size: .8rem; color: #333; }
+      .print-head .print-date { margin-left: auto; font-size: .75rem; color: #444; text-align: right; white-space: nowrap; }
     }
   </style>
   {% block extra_head %}{% endblock %}

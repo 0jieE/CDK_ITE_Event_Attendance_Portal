@@ -11,9 +11,9 @@
         <tr>
           <td>{{ log.student.student_number }} &mdash; {{ log.student.user.get_full_name|default:log.student.user.username }}</td>
           <td>{{ log.student.year_section|default:"—" }}</td>
-          <td data-order="{{ log.date|date:'Y-m-d' }}">{{ log.date|date:"M d, Y" }}</td>
-          <td>{{ log.get_attendance_type_display }}</td>
-          <td data-order="{{ log.scanned_at|date:'U' }}">{{ log.scanned_at|date:"M d, Y g:i A"|default:"—" }}</td>
+          <td class="text-nowrap" data-order="{{ log.date|date:'Y-m-d' }}">{{ log.date|date:"M d, Y" }}</td>
+          <td class="text-nowrap">{{ log.get_attendance_type_display }}</td>
+          <td class="text-nowrap" data-order="{{ log.scanned_at|date:'U' }}">{{ log.scanned_at|date:"M d, Y g:i A"|default:"—" }}</td>
           <td>{{ log.scanned_by.user.get_full_name|default:"—" }}</td>
         </tr>
       {% endfor %}

@@ -4,19 +4,6 @@
 {% block page_title %}Attendance Logs{% endblock %}
 
 {% block content %}
-<style>
-  .print-head { display: none; }
-  @media print {
-    .print-head { display: flex; align-items: center; gap: .9rem; border-bottom: 2px solid #111; padding-bottom: .6rem; margin-bottom: .9rem; color: #111; }
-    .print-head img { width: 64px; height: 64px; object-fit: contain; }
-    .print-head h3 { margin: 0; font-size: 1.35rem; font-weight: 700; }
-    .print-head .print-sub { font-size: .85rem; color: #333; }
-    .card { border: 0 !important; box-shadow: none !important; }
-    .card-body { padding: 0 !important; }
-    .dataTables_length, .dataTables_filter, .dataTables_info, .dataTables_paginate { display: none !important; }
-  }
-</style>
-
 <div class="page-head no-print">
   <div>
     <h2 class="page-title">Attendance Logs</h2>
@@ -102,18 +89,11 @@
     </form>
 
     {# Printed header: ITE logo + the event (By Event) or the student (By Student). #}
-    <div class="print-head">
-      <img src="{% if ui.logo_url %}{{ ui.logo_url }}{% else %}{% static 'portal/img/ite-logo.png' %}{% endif %}" alt="ITE logo">
-      <div>
-        {% if tab == 'event' %}
-          <h3>{{ event_obj.name|default:"Attendance Logs" }}</h3>
-          <div class="print-sub">{% if event_obj %}{{ event_obj.semester }} &middot; {{ event_obj.start_date|date:"M d, Y" }}{% if event_obj.end_date != event_obj.start_date %} &ndash; {{ event_obj.end_date|date:"M d, Y" }}{% endif %}{% endif %}</div>
-        {% else %}
-          <h3>{% if student_obj %}{{ student_obj.user.get_full_name|default:student_obj.user.username }}{% else %}Attendance Logs{% endif %}</h3>
-          <div class="print-sub">{% if student_obj %}{{ student_obj.student_number }}{% if student_obj.year_section %} &middot; {{ student_obj.year_section }}{% endif %} &middot; {% if semester %}{{ semester }}{% else %}All semesters{% endif %}{% endif %}</div>
-        {% endif %}
-      </div>
-    </div>
+    {% if tab == 'event' %}
+      {% include "portal/partials/print_head.html" with title=event_obj.name|default:"Attendance Logs" subtitle=print_subtitle %}
+    {% else %}
+      {% include "portal/partials/print_head.html" with title=print_title subtitle=print_subtitle %}
+    {% endif %}
 
     {% if tab == 'student' and not student_obj %}
       <div class="text-center text-muted py-5 no-print">
