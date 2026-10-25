@@ -60,6 +60,12 @@ Related accepted trade-offs:
   The file contains personal data and password hashes, so treat it like a password list: do not commit it or
   send it in chat. A restore only accepts our own tables, refuses a file without users, runs in one
   transaction, and never deletes the Cloudinary images.
+- **Offline copies** (service worker): pages the adviser opens are kept on that device so the portal works
+  without a connection. They never include the credentials page, downloads or forms; they are removed on
+  logout and when another user signs in; the offline change queue is per user and is replayed only under
+  that same account, through the normal endpoints (CSRF + permissions apply; an expired session just pauses
+  the queue). Anyone with unlocked access to the device could still read what was saved - use it on your own
+  devices and keep a screen lock.
 - Email is not stored at all (not needed: sign-in is username + password), so there is no
   personal email data to leak.
 

@@ -247,8 +247,9 @@ def pay_slots(fine, slots=None, recorded_by=None, when=None, now=None):
                 raise ValueError("That slot is not a missed slot of this fine.")
             if key not in already:
                 wanted.append((key[0], key[1], by_key[key]))
+    paid_at = when or timezone.now()
     FineSlotPayment.objects.bulk_create(
-        FineSlotPayment(fine=fine, date=d, attendance_type=t, amount=r, recorded_by=recorded_by)
+        FineSlotPayment(fine=fine, date=d, attendance_type=t, amount=r, recorded_by=recorded_by, paid_at=paid_at)
         for d, t, r in wanted
     )
     fine.save(update_fields=["missed_slots", "amount", "updated_at"])

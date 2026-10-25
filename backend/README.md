@@ -309,13 +309,27 @@ The portal is designed phone-first (`portal/static/portal/css/mobile.css`, `js/m
 * **Native feel** - safe-area insets (notch / home indicator), `100dvh`, no tap delay, no overscroll bounce,
   reduced-motion respected. Printing is untouched (all of this is `@media screen`).
 * **Installable app** - `GET /portal/manifest.webmanifest` (public; name/colours follow the Settings page),
-  192/512 and maskable icons, Apple touch icon, `standalone` display and home-screen shortcuts, plus a
-  **service worker** (`/portal/sw.js`, scope `/portal/`). The worker **caches nothing** (logged-in pages hold
-  personal data) - it only makes the portal installable and shows an offline page when the network is down.
-  An **Install app** button (account menu, and the phone drawer) triggers the browser's native install
-  prompt on Chrome/Edge/Android and opens a short how-to on iPhone/Safari and other browsers; it hides itself
-  once the portal runs as an installed app. **Possible next steps:** cache static assets for faster starts,
-  an offline read-only mode for non-sensitive pages, and web-push.
+  192/512 and maskable icons, Apple touch icon, `standalone` display and home-screen shortcuts, an
+  **Install app** button (account menu + phone drawer: native prompt on Chrome/Edge/Android, a how-to on
+  iPhone/Safari) that hides once installed.
+* **Works offline** (`/portal/sw.js` service worker + `portal/js/offline.js`):
+  * **Saved copies** - the app files (and CDN libraries) are kept so the portal opens with no connection.
+    Pages are **network-first** (online you always see fresh data); offline you get the last saved copy of
+    that page with a "saved copy from ..." banner. After sign-in, and every 6 hours, the main lists, the
+    active semester's per-event logs/fines and the pay page of every fine that still needs action are
+    saved automatically (`GET /portal/offline/manifest/` lists them); anything you open is saved too.
+    Never saved: sign-in/out, the credentials page, downloads (`?format=`), forms.
+  * **Changes made offline** - fine payments (pay a slot, undo, pay all), the event Active switch and
+    "Set active semester" are saved in an on-device queue (IndexedDB, per user) and **replayed in order**
+    when the connection returns, with the **time they were really taken** (`X-Offline-Time`; shown in the
+    payment record). Replays are idempotent (the switch sends the wanted state, not "flip"). A top-bar chip
+    shows *Offline / Syncing / N pending / N need attention*; its dialog lists the queue and lets you
+    Retry or Discard anything the server could not apply (e.g. the slot was credited meanwhile).
+    An expired session keeps the queue and asks you to sign in again.
+  * **Needs a connection** (and says so): adding / editing / deleting records, importing, calculating fines,
+    CSV downloads, sign-in and sign-out.
+  * **Privacy** - saved pages and the queue live only on that device; logging out wipes the saved pages
+    (and a different user signing in on the same device does too). Use it on your own devices.
 
 ### Where each section lives (all under `/portal/`)
 | Section | URL | Notes |

@@ -11,6 +11,7 @@ urlpatterns = [
     path("login/", views.login_view, name="login"),
     path("manifest.webmanifest", views.manifest_view, name="manifest"),
     path("sw.js", views.service_worker_view, name="sw"),
+    path("offline/manifest/", views.offline_manifest_view, name="offline-manifest"),
     path("logout/", views.logout_view, name="logout"),
     # Attendance logs (read-only)
     path("attendance_logs/", views.attendance_logs_view, name="attendance_logs-list"),

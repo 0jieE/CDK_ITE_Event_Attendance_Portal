@@ -7,6 +7,7 @@
   <meta name="theme-color" content="{{ ui.primary }}">
   <title>{% block title %}Admin Portal{% endblock %} · ITE Attendance</title>
   {% include "portal/partials/pwa_head.html" %}
+  <meta name="portal-user" content="{{ request.user.pk }}">
 
   <script>
     /* Apply the saved sidebar state before first paint (no layout flash).
@@ -167,6 +168,7 @@
     }
   </style>
   <link rel="stylesheet" href="{% static 'portal/css/mobile.css' %}">
+  <link rel="stylesheet" href="{% static 'portal/css/offline.css' %}">
   {% block extra_head %}{% endblock %}
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
@@ -247,7 +249,9 @@
         <i class="bi bi-list"></i>
       </button>
       <h1 class="page-name">{% block page_title %}{{ title|default:"Dashboard" }}{% endblock %}</h1>
-      <div class="dropdown ms-auto">
+      <div class="ms-auto d-flex align-items-center gap-2">
+      <button type="button" class="sync-chip" id="syncChip" hidden aria-haspopup="dialog" aria-label="Offline and sync status"></button>
+      <div class="dropdown">
         <a class="user-chip dropdown-toggle" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">
           {% with photo=request.user.avatar_url %}
             {% if photo %}<img class="avatar" src="{{ photo }}" alt="" width="30" height="30">
@@ -269,7 +273,14 @@
           <li><a class="dropdown-item" href="{% url 'portal:logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
         </ul>
       </div>
+      </div>
     </header>
+
+    <div id="offlineBanner" class="offline-banner no-print" role="status" hidden>
+      <i class="bi bi-wifi-off"></i><span class="msg"></span>
+      <button type="button" class="reload" data-reload hidden>Refresh</button>
+      <button type="button" data-dismiss aria-label="Dismiss"><i class="bi bi-x"></i></button>
+    </div>
 
     <main class="portal-main" id="main">
       {% block content %}{% endblock %}
@@ -531,7 +542,31 @@
   </script>
   {% block extra_js %}{% endblock %}
   <script src="{% static 'portal/js/mobile.js' %}"></script>
+  <script src="{% static 'portal/js/offline.js' %}"></script>
   <script src="{% static 'portal/js/pwa.js' %}"></script>
+
+  <!-- Offline / sync status -->
+  <div class="modal fade" id="syncDialog" tabindex="-1" aria-labelledby="syncDialogTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="syncDialogTitle"><i class="bi bi-cloud-arrow-up me-2"></i>Offline &amp; sync</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="fw-semibold mb-2" data-sync-status></p>
+          <ul class="list-group mb-3" data-sync-list></ul>
+          <p class="small text-muted mb-2"><i class="bi bi-download me-1"></i><span data-saved-info></span></p>
+          <p class="small text-muted mb-0">Fine payments, the event Active switch and "Set active semester" work offline and sync later.
+            Adding or editing records, importing and reports exports need a connection.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-refresh-offline><i class="bi bi-arrow-repeat me-1"></i>Refresh offline data</button>
+          <button type="button" class="btn btn-primary" data-sync-now><i class="bi bi-cloud-upload me-1"></i>Sync now</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- How to install when the browser has no install prompt (iPhone, Firefox, ...) -->
   <div class="modal fade" id="installHelp" tabindex="-1" aria-labelledby="installHelpTitle" aria-hidden="true">

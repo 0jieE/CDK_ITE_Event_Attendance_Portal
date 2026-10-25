@@ -18,6 +18,7 @@ from django.core.files.base import ContentFile
 from django.db import models, transaction
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
+from django.utils import timezone
 
 
 class AttendanceType(models.TextChoices):
@@ -465,7 +466,8 @@ class FineSlotPayment(models.Model):
     date = models.DateField()
     attendance_type = models.CharField(max_length=10, choices=AttendanceType.choices)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    paid_at = models.DateTimeField(auto_now_add=True)
+    # when the cash was taken (a payment recorded offline is stamped with the time it really happened)
+    paid_at = models.DateTimeField(default=timezone.now)
     recorded_by = models.ForeignKey(
         "accounts.User", on_delete=models.SET_NULL, blank=True, null=True,
         related_name="recorded_slot_payments",

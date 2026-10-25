@@ -1,0 +1,32 @@
+/* Offline support UI: status chip, "saved copy" banner, pending markers, sync dialog */
+
+.sync-chip {
+  display: inline-flex; align-items: center; gap: .4rem; min-height: 36px; padding: .25rem .75rem;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--app-surface); color: var(--ink);
+  font-size: .8rem; font-weight: 700; white-space: nowrap; cursor: pointer;
+}
+.sync-chip[hidden] { display: none; }
+.sync-chip i { font-size: 1rem; }
+.sync-chip.is-offline { background: #3b3f3a; border-color: #3b3f3a; color: #fff; }
+.sync-chip.is-pending { background: #fff3cd; border-color: #f0d36b; color: #7a5a00; }
+.sync-chip.is-failed { background: #fde2e5; border-color: #f2a6af; color: #a1202f; }
+.sync-chip.is-syncing { background: rgba(var(--brand-rgb), .12); border-color: rgba(var(--brand-rgb), .5); color: var(--brand-ink, var(--ink)); }
+.sync-chip.is-syncing i { animation: ite-spin 1s linear infinite; }
+@keyframes ite-spin { to { transform: rotate(360deg); } }
+@media (max-width: 575.98px) { .sync-chip { padding-inline: .6rem; font-size: .75rem; } }
+
+.offline-banner {
+  display: flex; align-items: center; gap: .6rem; margin: 0; padding: .6rem 1rem;
+  background: #3b3f3a; color: #fff; font-size: .85rem; line-height: 1.35;
+}
+.offline-banner[hidden] { display: none; }
+.offline-banner .msg { flex: 1; min-width: 0; }
+.offline-banner button { border: 0; background: rgba(255,255,255,.15); color: #fff; border-radius: 999px; width: 28px; height: 28px; flex: 0 0 auto; }
+.offline-banner button.reload { width: auto; padding: 0 .9rem; height: 32px; font-weight: 700; background: var(--brand); color: var(--on-brand); }
+.offline-banner button[hidden] { display: none; }
+
+/* things that need the server look unavailable while offline (a tap explains why) */
+html.is-offline .offline-blocked { opacity: .5; cursor: not-allowed; }
+.pending-badge { white-space: nowrap; }
+
+@media print { .sync-chip, .offline-banner { display: none !important; } }

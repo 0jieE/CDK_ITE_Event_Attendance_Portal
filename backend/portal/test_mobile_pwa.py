@@ -105,7 +105,7 @@ class MobileShellTests(TestCase):
 
 
 class InstallAppTests(TestCase):
-    def test_service_worker_is_public_scoped_and_never_caches(self):
+    def test_service_worker_is_public_scoped_and_careful_about_what_it_saves(self):
         res = self.client.get(reverse("portal:sw"))
         self.assertEqual(res.status_code, 200)                                  # anonymous: browsers fetch it without a session
         self.assertTrue(res["Content-Type"].startswith("application/javascript"))
@@ -114,8 +114,9 @@ class InstallAppTests(TestCase):
         js = res.content.decode()
         self.assertIn("addEventListener('fetch'", js)                           # what makes it installable
         self.assertIn("You're offline", js)
-        for forbidden in ("caches.open", "cache.put", "cache.add", "addAll(", "caches.match"):
-            self.assertNotIn(forbidden, js, forbidden)                          # logged-in pages must never be stored
+        self.assertIn("if (req.method !== 'GET') return;", js)                  # writes are never intercepted or stored
+        for never in ("students\\/credentials", "(login|logout)", "searchParams.has('format')"):
+            self.assertIn(never, js, never)                                     # passwords / sessions / downloads are never saved
 
     def test_pages_register_the_worker_and_offer_install_buttons(self):
         User.objects.create_user("adviser", password=PW, is_admin=True)

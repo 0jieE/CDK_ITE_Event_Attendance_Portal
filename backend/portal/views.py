@@ -141,7 +141,8 @@ class EventsSection(CrudSection):
         event = get_object_or_404(Event, pk=pk)
         if request.method != "POST":
             return HttpResponse(status=405)
-        event.is_active = not event.is_active
+        wanted = request.POST.get("value")                  # "on" / "off": replays must be idempotent
+        event.is_active = (wanted == "on") if wanted in ("on", "off") else not event.is_active
         event.save(update_fields=["is_active"])
         state = "active" if event.is_active else "inactive"
         return htmx_action_response(
@@ -357,6 +358,65 @@ def manifest_view(request):
     return response
 
 
+@admin_required
+def offline_manifest_view(request):
+    """URLs the browser should save for offline use (the service worker fetches them with the user's session).
+
+    The main pages, the active semester's per-event logs / fines, and the day-by-day page of every
+    fine that still needs action, so a payment can be recorded without a connection. Capped so the
+    download stays small; everything else is saved as it is visited.
+    """
+    semester = Semester.current()
+    sid = semester.pk if semester else ""
+    urls = [
+        "/portal/", "/portal/instructors/", "/portal/students/", "/portal/events/", "/portal/terms/",
+        "/portal/attendance_logs/", "/portal/attendance_logs/?tab=student", "/portal/reports/attendance/",
+        "/portal/reports/financial/", "/portal/fines/", "/portal/fines/?view=student", "/portal/settings/",
+        "/portal/students/import/",
+    ]
+    if semester:
+        events = list(Event.objects.filter(semester=semester).order_by("-start_date")[:40])
+        for event in events:
+            urls.append(f"/portal/attendance_logs/?tab=event&semester={sid}&event={event.pk}")
+            urls.append(f"/portal/fines/?view=event&semester={sid}&event={event.pk}")
+        open_fines = (
+            Fine.objects.filter(event__semester=semester, status=Fine.Status.UNPAID)
+            .order_by("student_id", "event_id").values_list("student_id", "event_id")[:250]
+        )
+        seen_students = set()
+        for student_id, event_id in open_fines:
+            urls.append(f"/portal/fines/?view=student&semester={sid}&student={student_id}&event={event_id}")
+            if student_id not in seen_students:
+                seen_students.add(student_id)
+                urls.append(f"/portal/fines/?view=student&semester={sid}&student={student_id}")
+    response = JsonResponse({
+        "generated_at": timezone.now().isoformat(),
+        "user": request.user.pk,
+        "semester": str(semester) if semester else None,
+        "urls": urls,
+    })
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+#: Third-party files base.html loads from CDNs; the service worker keeps a copy so the portal opens offline.
+#: (test_offline.py checks this list against base.html so it cannot drift.)
+OFFLINE_CDN_ASSETS = [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
+    "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css",
+    "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css",
+    "https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css",
+    "https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css",
+    "https://code.jquery.com/jquery-3.7.1.min.js",
+    "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js",
+    "https://unpkg.com/htmx.org@1.9.12",
+    "https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js",
+    "https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js",
+    "https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js",
+    "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js",
+]
+
+
 def service_worker_view(request):
     """The service worker (``/portal/sw.js``, scope ``/portal/``).
 
@@ -364,7 +424,8 @@ def service_worker_view(request):
     served from. It caches nothing (see the template) - it only makes the portal installable and
     shows an offline page. Never cached by the browser so updates are picked up straight away.
     """
-    response = render(request, "portal/sw.js", content_type="application/javascript; charset=utf-8")
+    response = render(request, "portal/sw.js", {"cdn_assets": OFFLINE_CDN_ASSETS},
+                      content_type="application/javascript; charset=utf-8")
     response["Service-Worker-Allowed"] = "/portal/"
     response["Cache-Control"] = "no-cache, max-age=0"
     return response
@@ -697,6 +758,26 @@ def fines_calculate_view(request):
 
 
 @admin_required
+def _replay_time(request):
+    """The real time of an action that was queued offline (``X-Offline-Time``), else ``None``.
+
+    Only honoured for replays, and only when plausible: not in the future, not older than 14 days.
+    """
+    if request.headers.get("X-Offline-Replay") != "1":
+        return None
+    raw = request.headers.get("X-Offline-Time", "")
+    try:
+        when = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if timezone.is_naive(when):
+        return None
+    now = timezone.now()
+    if when > now or now - when > datetime.timedelta(days=14):
+        return None
+    return when
+
+
 def fines_mark_paid_view(request, pk):
     """Record that a fine was settled in cash with the treasurer."""
     fine = get_object_or_404(Fine, pk=pk)
@@ -709,7 +790,7 @@ def fines_mark_paid_view(request, pk):
             refresh_event="refresh-fines",
             close_modal=False,
         )
-    fine.mark_paid(recorded_by=request.user)
+    fine.mark_paid(recorded_by=request.user, when=_replay_time(request))
     if fine.status != Fine.Status.PAID:
         return htmx_action_response(
             toast="Nothing to pay on that fine yet.", level="warning",
@@ -742,7 +823,7 @@ def fines_pay_slot_view(request, pk):
     if key is None:
         return htmx_action_response(toast="Invalid slot.", level="error", close_modal=False)
     try:
-        paid = services.pay_slots(fine, slots=[key], recorded_by=request.user)
+        paid = services.pay_slots(fine, slots=[key], recorded_by=request.user, when=_replay_time(request))
     except ValueError as exc:
         return htmx_action_response(toast=str(exc), level="error", refresh_event="refresh-fines", close_modal=False)
     if not paid:
