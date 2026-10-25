@@ -192,7 +192,7 @@ student a username and password:
 | Endpoint | Who | Notes |
 |----------|-----|-------|
 | `GET /healthz/` | anyone | liveness + database check (200 / 503) for proxies and uptime monitors |
-| `GET /api/me/` | any user | identity, role flags and `profile_image` (used to route the app) |
+| `GET /api/me/` | any user | identity, role flags and `profile_image` (used to route the app); `password_version` is an opaque tag that changes when the password changes (the app uses it to drop its offline-login hash after a reset) |
 | `POST/DELETE /api/me/photo/` | any user | set (multipart `image`) / remove **own** profile photo |
 | `GET /api/instructor/events/` | instructor | active events running today (`?all=true`: **every** event, newest first) |
 | `GET /api/instructor/events/{id}/attendance/` (`?date=`) | instructor | read-only class roster for one event-day: every student with PRESENT / ABSENT / PENDING per required slot, plus per-slot totals |

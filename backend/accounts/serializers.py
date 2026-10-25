@@ -6,6 +6,7 @@ name and role — on read.
 """
 
 from django.contrib.auth.password_validation import validate_password
+from django.utils.crypto import salted_hmac
 from rest_framework import serializers
 
 from .models import Instructor, Student, User
@@ -35,6 +36,7 @@ class MeSerializer(ProfileImageMixin, serializers.ModelSerializer):
 
     full_name = serializers.CharField(source="get_full_name", read_only=True)
     profile_image = serializers.SerializerMethodField()
+    password_version = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -47,8 +49,18 @@ class MeSerializer(ProfileImageMixin, serializers.ModelSerializer):
             "is_student",
             "role",
             "profile_image",
+            "password_version",
         ]
         read_only_fields = fields
+
+    def get_password_version(self, user):
+        """An opaque tag that changes whenever the password changes.
+
+        The mobile app keeps it next to its offline-login hash; when it differs after reconnecting, the
+        password was changed elsewhere and the app drops the offline credentials. Derived from the password
+        hash with a keyed HMAC, so it never reveals the hash.
+        """
+        return salted_hmac("ite-offline-login", user.password).hexdigest()[:16]
 
 
 class UserSerializer(ProfileImageMixin, serializers.ModelSerializer):

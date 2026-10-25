@@ -228,3 +228,39 @@ class InstructorApiCreationTests(TestCase):
         self.assertEqual(res.status_code, 201, res.content)
         self.assertEqual(Instructor.objects.filter(user__username="api.prof").count(), 1)
         self.assertTrue(User.objects.get(username="api.prof").is_instructor)
+
+
+class PasswordVersionTests(TestCase):
+    """GET /api/me/ exposes a tag that changes with the password (mobile offline-login revalidation)."""
+
+    def me(self, user):
+        api = APIClient()
+        api.force_authenticate(user)
+        return api.get(reverse("me")).json()
+
+    def test_tag_is_present_stable_and_changes_with_the_password(self):
+        user = User.objects.create_user("stu", password=STRONG, is_student=True)
+        first = self.me(user)["password_version"]
+        self.assertRegex(first, r"^[0-9a-f]{16}$")
+        user.refresh_from_db()
+        self.assertEqual(self.me(user)["password_version"], first)                     # stable between calls
+        user.last_login = None
+        user.save()
+        self.assertEqual(self.me(user)["password_version"], first)                     # unrelated edits keep it
+        user.set_password("Another-Str0ng-Pass-77!")
+        user.save()
+        self.assertNotEqual(self.me(user)["password_version"], first)
+
+    def test_tag_does_not_reveal_the_hash_and_differs_per_user(self):
+        a = User.objects.create_user("a", password=STRONG, is_student=True)
+        b = User.objects.create_user("b", password=STRONG, is_student=True)       # same password, different salt
+        tag = self.me(a)["password_version"]
+        self.assertNotIn(tag, a.password)
+        self.assertNotEqual(tag, self.me(b)["password_version"])
+
+    def test_not_leaked_by_other_payloads(self):
+        boss = make_super()
+        api = APIClient()
+        api.force_authenticate(boss)
+        users = api.get(reverse("user-list")).json()["results"]
+        self.assertTrue(all("password_version" not in u and "password" not in u for u in users))
