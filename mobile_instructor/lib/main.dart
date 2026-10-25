@@ -11,6 +11,8 @@ import 'services/offline_credentials.dart';
 import 'services/offline_prefetch.dart';
 import 'services/offline_scan_service.dart';
 import 'theme/app_theme.dart';
+import 'update/update_service.dart';
+import 'update/update_ui.dart';
 import 'widgets/logout_action.dart';
 import 'widgets/state_message.dart';
 
@@ -63,16 +65,21 @@ class IteInstructorsApp extends StatelessWidget {
             return offline!;
           },
         ),
+        // In-app updates from GitHub Releases (see AUTO_UPDATE_SETUP.md).
+        ChangeNotifierProvider(create: (_) => UpdateService()),
       ],
       // Downloads the instructor's data for offline use whenever online.
       child: OfflinePrefetcher(
-        child: MaterialApp(
-          title: 'ITE Instructors',
-          debugShowCheckedModeBanner: false,
-          // Always the light + green look, even when the phone is in dark mode.
-          theme: AppTheme.light,
-          themeMode: AppTheme.themeMode,
-          home: const RootRouter(),
+        // Checks GitHub for a newer release after start-up and on resume.
+        child: UpdateChecker(
+          child: MaterialApp(
+            title: 'ITE Instructors',
+            debugShowCheckedModeBanner: false,
+            // Always the light + green look, even when the phone is in dark mode.
+            theme: AppTheme.light,
+            themeMode: AppTheme.themeMode,
+            home: const RootRouter(),
+          ),
         ),
       ),
     );

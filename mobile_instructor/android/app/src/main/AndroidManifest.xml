@@ -3,6 +3,9 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Instructor QR scanning -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- In-app updates: hand a downloaded APK to Android's installer (the
+         user still confirms, and grants "Install unknown apps" once). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
     <application
@@ -32,6 +35,16 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Shares downloaded updates (cache/updates) with the installer. -->
+        <provider
+            android:name=".UpdateFileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

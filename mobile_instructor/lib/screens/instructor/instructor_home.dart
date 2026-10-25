@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../widgets/logout_action.dart';
+import '../../update/update_ui.dart';
 import '../../widgets/offline_banner.dart';
 import 'attendance_tab.dart';
 import 'scan_tab.dart';
@@ -25,10 +26,17 @@ class _InstructorHomeState extends State<InstructorHome> {
 
   @override
   Widget build(BuildContext context) {
+    // Offers an available update (never over sign-in or the scanner).
+    return UpdatePrompter(
+      child: _scaffold(context),
+    );
+  }
+
+  Widget _scaffold(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_index]),
-        actions: const [LogoutAction()],
+        actions: const [LogoutAction(), UpdateMenuButton()],
       ),
       body: Column(
         children: [
