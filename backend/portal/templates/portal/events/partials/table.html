@@ -39,7 +39,9 @@
                 <i class="bi bi-pencil"></i>
               </button>
             {% endif %}
-            {% if can_delete %}
+            {% if can_delete and obj.has_logs or can_delete and obj.has_paid %}
+              <span class="btn btn-sm disabled text-muted border" title="Has attendance records or fine payments - it can be edited but not deleted"><i class="bi bi-lock"></i></span>
+            {% elif can_delete %}
               <button class="btn btn-sm btn-outline-danger"
                       hx-post="{% url delete_urlname obj.id %}"
                       hx-confirm="Delete “{{ obj.name }}”? This cannot be undone."

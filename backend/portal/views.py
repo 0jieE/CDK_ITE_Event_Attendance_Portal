@@ -13,6 +13,7 @@ import logging
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, get_user_model, login, logout
+from django.db.models import Exists, OuterRef
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -119,7 +120,20 @@ class EventsSection(CrudSection):
     order_by = ("-start_date", "name")
 
     def get_queryset(self, request=None):
-        return super().get_queryset(request).prefetch_related("day_fines")
+        return (
+            super().get_queryset(request).prefetch_related("day_fines")
+            .annotate(
+                has_logs=Exists(AttendanceLog.objects.filter(event=OuterRef("pk"))),
+                has_paid=Exists(Fine.objects.filter(event=OuterRef("pk"), amount_paid__gt=0)),
+            )
+        )
+
+    def delete_view(self, request, pk):
+        event = get_object_or_404(Event, pk=pk)
+        reason = event.delete_block_reason
+        if reason:
+            return htmx_action_response(toast=reason, level="error", refresh_event=self.refresh_event, close_modal=False)
+        return super().delete_view(request, pk)
 
 
 class _LinkedUserSection(CrudSection):
@@ -161,12 +175,17 @@ def terms_view(request):
     sees its Edit / Delete buttons.
     """
     school_years = list(SchoolYear.objects.prefetch_related("semesters__events").order_by("-sy"))
+    # semesters with attendance / paid fines can be edited but never deleted
+    recorded = set(AttendanceLog.objects.values_list("event__semester_id", flat=True).distinct())
+    recorded |= set(Fine.objects.filter(amount_paid__gt=0).values_list("event__semester_id", flat=True).distinct())
     for sy in school_years:
         sy.sem_list = list(sy.semesters.all())
         for sem in sy.sem_list:
             sem.event_count = len(sem.events.all())
             sem.locked = sem.event_count > 0
+            sem.no_delete = sem.pk in recorded
         sy.locked = any(sem.locked for sem in sy.sem_list)
+        sy.no_delete = any(sem.no_delete for sem in sy.sem_list)
     context = {
         "active": "terms",
         "school_years": school_years,
@@ -209,6 +228,10 @@ class _LockedWhenUsedSection(CrudSection):
         return self._locked_response(request, pk) or super().update_view(request, pk)
 
     def delete_view(self, request, pk):
+        obj = get_object_or_404(self.get_queryset(request), pk=pk)
+        reason = obj.delete_block_reason                 # for everyone, Super Admin included
+        if reason:
+            return htmx_action_response(toast=reason, level="error", refresh_event=self.refresh_event, close_modal=False)
         return self._locked_response(request, pk) or super().delete_view(request, pk)
 
 

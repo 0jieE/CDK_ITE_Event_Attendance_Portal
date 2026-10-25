@@ -53,6 +53,9 @@ class _LockedWhenUsedMixin:
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
+        reason = self.get_object().delete_block_reason       # for everyone, Super Admin included
+        if reason:
+            raise PermissionDenied(reason)
         self._guard()
         return super().destroy(request, *args, **kwargs)
 
@@ -89,6 +92,12 @@ class EventViewSet(viewsets.ModelViewSet):
     filterset_class = EventFilter
     search_fields = ["name"]
     ordering_fields = ["start_date", "end_date", "name"]
+
+    def destroy(self, request, *args, **kwargs):
+        reason = self.get_object().delete_block_reason
+        if reason:
+            raise PermissionDenied(reason)
+        return super().destroy(request, *args, **kwargs)
 
 
 class AttendanceLogViewSet(viewsets.ReadOnlyModelViewSet):

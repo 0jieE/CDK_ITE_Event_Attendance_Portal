@@ -13,14 +13,28 @@ from .models import (
 )
 
 
+class _KeepRecordedDataMixin:
+    """Never offer deleting a record whose attendance / fine payments would be lost with it."""
+
+    def has_delete_permission(self, request, obj=None):
+        if obj is not None and obj.delete_block_reason:
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop("delete_selected", None)        # the bulk action cannot check each record
+        return actions
+
+
 @admin.register(SchoolYear)
-class SchoolYearAdmin(admin.ModelAdmin):
+class SchoolYearAdmin(_KeepRecordedDataMixin, admin.ModelAdmin):
     list_display = ("id", "sy")
     search_fields = ("sy",)
 
 
 @admin.register(Semester)
-class SemesterAdmin(admin.ModelAdmin):
+class SemesterAdmin(_KeepRecordedDataMixin, admin.ModelAdmin):
     list_display = ("id", "school_year", "name")
     list_filter = ("school_year", "name")
     search_fields = ("school_year__sy",)
@@ -32,7 +46,7 @@ class EventDayFineInline(admin.TabularInline):
 
 
 @admin.register(Event)
-class EventAdmin(admin.ModelAdmin):
+class EventAdmin(_KeepRecordedDataMixin, admin.ModelAdmin):
     inlines = [EventDayFineInline]
     list_display = (
         "name",

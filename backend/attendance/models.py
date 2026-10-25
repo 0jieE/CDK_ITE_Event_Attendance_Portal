@@ -39,6 +39,15 @@ def default_required_types():
     ]
 
 
+def _records_block_reason(logs, fines, noun):
+    """Deleting cascades to attendance and fines, so records that exist block the delete."""
+    if logs.exists():
+        return f"This {noun} already has attendance records, so it cannot be deleted (you can still edit it)."
+    if fines.filter(amount_paid__gt=0).exists():
+        return f"This {noun} already has fine payments recorded, so it cannot be deleted (you can still edit it)."
+    return None
+
+
 class SchoolYear(models.Model):
     """An academic year such as ``2025-2026``."""
 
@@ -55,6 +64,12 @@ class SchoolYear(models.Model):
     def has_events(self):
         """True once any event exists under this school year (it is then locked for advisers)."""
         return Event.objects.filter(semester__school_year=self).exists()
+
+    @property
+    def delete_block_reason(self):
+        """Why this school year must not be deleted (``None`` = it may be)."""
+        return _records_block_reason(AttendanceLog.objects.filter(event__semester__school_year=self),
+                                     Fine.objects.filter(event__semester__school_year=self), "school year")
 
 
 class Semester(models.Model):
@@ -110,6 +125,12 @@ class Semester(models.Model):
     def has_events(self):
         """True once an event exists under this semester (it is then locked for advisers)."""
         return self.events.exists()
+
+    @property
+    def delete_block_reason(self):
+        """Why this semester must not be deleted (``None`` = it may be)."""
+        return _records_block_reason(AttendanceLog.objects.filter(event__semester=self),
+                                     Fine.objects.filter(event__semester=self), "semester")
 
 
 class Event(models.Model):
@@ -213,6 +234,11 @@ class Event(models.Model):
             if start is not None and end is not None and start <= when <= end:
                 return slot
         return None
+
+    @property
+    def delete_block_reason(self):
+        """Why this event must not be deleted (``None`` = it may be)."""
+        return _records_block_reason(self.attendance_logs.all(), self.fines.all(), "event")
 
     @property
     def day_rates(self):
