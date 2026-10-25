@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="{{ ui.primary }}">
   <title>{% block title %}Admin Portal{% endblock %} · ITE Attendance</title>
+  {% include "portal/partials/pwa_head.html" %}
 
   <script>
     /* Apply the saved sidebar state before first paint (no layout flash).
@@ -165,9 +166,11 @@
       .print-head .print-date { margin-left: auto; font-size: .75rem; color: #444; text-align: right; white-space: nowrap; }
     }
   </style>
+  <link rel="stylesheet" href="{% static 'portal/css/mobile.css' %}">
   {% block extra_head %}{% endblock %}
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  <a class="visually-hidden-focusable position-absolute m-2 p-2 bg-white rounded" style="z-index:2000" href="#main">Skip to content</a>
 
   <!-- Sidebar -->
   <nav class="sidebar no-print" id="sidebar" aria-label="Main navigation">
@@ -177,6 +180,7 @@
         {{ ui.brand_title }}
         <small>{{ ui.brand_subtitle }}</small>
       </span>
+      <button type="button" class="drawer-close drawer-only" aria-label="Close menu"><i class="bi bi-x-lg"></i></button>
     </div>
     <ul class="nav nav-pills flex-column">
       {% for item in nav_items %}
@@ -217,6 +221,19 @@
         {% endif %}
       {% endfor %}
     </ul>
+    <div class="drawer-user drawer-only">
+      <div class="who">
+        {% with photo=request.user.avatar_url %}
+          {% if photo %}<img class="avatar" src="{{ photo }}" alt="" width="40" height="40">
+          {% else %}<span class="avatar">{{ request.user.initials|slice:":1" }}</span>{% endif %}
+        {% endwith %}
+        <span class="min-w-0">
+          <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>
+          <small>{% if request.user.is_superuser %}Super Admin{% else %}Department Adviser{% endif %}</small>
+        </span>
+      </div>
+      <a class="btn" href="{% url 'portal:logout' %}"><i class="bi bi-box-arrow-right me-1"></i> Log out</a>
+    </div>
     <div class="sidebar-foot">Colegio de Kidapawan · ITE</div>
   </nav>
   <div class="sidebar-backdrop no-print" id="sidebarBackdrop" aria-hidden="true"></div>
@@ -252,10 +269,19 @@
       </div>
     </header>
 
-    <main class="portal-main">
+    <main class="portal-main" id="main">
       {% block content %}{% endblock %}
     </main>
   </div>
+
+  <!-- Bottom navigation (phones): the four most used pages + the full menu -->
+  <nav class="bottom-nav no-print" aria-label="Quick navigation">
+    <a href="{% url 'portal:dashboard' %}" class="{% if active == 'dashboard' %}active{% endif %}"{% if active == 'dashboard' %} aria-current="page"{% endif %}><i class="bi bi-speedometer2"></i><span>Home</span></a>
+    <a href="{% url 'portal:students-list' %}" class="{% if active == 'students' %}active{% endif %}"{% if active == 'students' %} aria-current="page"{% endif %}><i class="bi bi-mortarboard"></i><span>Students</span></a>
+    <a href="{% url 'portal:events-list' %}" class="{% if active == 'events' %}active{% endif %}"{% if active == 'events' %} aria-current="page"{% endif %}><i class="bi bi-calendar-event"></i><span>Events</span></a>
+    <a href="{% url 'portal:fines-list' %}" class="{% if active == 'fines' %}active{% endif %}"{% if active == 'fines' %} aria-current="page"{% endif %}><i class="bi bi-cash-coin"></i><span>Fines</span></a>
+    <button type="button" id="bottomMore" class="{% if active != 'dashboard' and active != 'students' and active != 'events' and active != 'fines' %}active{% endif %}" aria-controls="sidebar"><i class="bi bi-grid"></i><span>More</span></button>
+  </nav>
 
   <!-- Toasts -->
   {% include "portal/partials/toasts.html" %}
@@ -321,6 +347,8 @@
       window.addEventListener('pageshow', function () { setOpen(false); });
       sync();
     })();
+
+    // (mobile behaviour - drawer gestures, bottom bar, stacked tables, filters - lives in portal/js/mobile.js)
 
     // ---------------------------------------------------------------------
     // Event form: show a scan window only for the required types that are
@@ -500,5 +528,6 @@
     }
   </script>
   {% block extra_js %}{% endblock %}
+  <script src="{% static 'portal/js/mobile.js' %}"></script>
 </body>
 </html>

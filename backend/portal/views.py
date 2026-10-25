@@ -14,8 +14,9 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.db.models import Exists, OuterRef
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -311,6 +312,49 @@ def _logs_semester(request):
     if raw.isdigit():
         return Semester.objects.select_related("school_year").filter(pk=raw).first()
     return None
+
+
+def manifest_view(request):
+    """Web App Manifest: makes the portal installable ("Add to Home screen") as a standalone app.
+
+    Public on purpose - browsers fetch it without credentials. Name and colours follow the
+    portal's branding settings.
+    """
+    from django.templatetags.static import static
+
+    from .context import ui_settings
+
+    ui = ui_settings(request)["ui"]
+    home = reverse("portal:dashboard")
+    icon = lambda name, size, purpose="any": {                       # noqa: E731
+        "src": static(f"portal/pwa/{name}"), "sizes": f"{size}x{size}", "type": "image/png", "purpose": purpose}
+    shortcut = lambda name, url_name: {                              # noqa: E731
+        "name": name, "url": reverse(url_name), "icons": [icon("icon-192.png", 192)]}
+    data = {
+        "id": home,
+        "name": ui["brand_title"] or "ITE Attendance",
+        "short_name": "ITE Attendance",
+        "description": "Event attendance, QR scanning and fines for the ITE Department.",
+        "lang": "en",
+        "start_url": home + "?source=pwa",
+        "scope": home,
+        "display": "standalone",
+        "display_override": ["standalone", "minimal-ui"],
+        "orientation": "any",
+        "background_color": ui["body_bg"],
+        "theme_color": ui["primary"],
+        "categories": ["education", "productivity"],
+        "icons": [icon("icon-192.png", 192), icon("icon-512.png", 512), icon("icon-maskable-512.png", 512, "maskable")],
+        "shortcuts": [
+            shortcut("Dashboard", "portal:dashboard"),
+            shortcut("Students", "portal:students-list"),
+            shortcut("Fines", "portal:fines-list"),
+            shortcut("Attendance logs", "portal:attendance_logs-list"),
+        ],
+    }
+    response = JsonResponse(data, content_type="application/manifest+json")
+    response["Cache-Control"] = "public, max-age=3600"
+    return response
 
 
 @admin_required

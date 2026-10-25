@@ -26,14 +26,14 @@
 
 <div class="card">
   <div class="card-body">
-    <form class="row g-2 mb-3 no-print" method="get" id="logsFilters" onchange="this.submit()">
+    <form class="row g-2 mb-3 no-print filters-form" method="get" id="logsFilters" onchange="this.submit()">
       <input type="hidden" name="tab" value="{{ tab }}">
       <div class="col-12 col-md-4">
         <label class="form-label small mb-1">Semester</label>
         <select name="semester" class="form-select form-select-sm">
           <option value="" {% if not filters.semester %}selected{% endif %}>All semesters</option>
           {% for s in semesters %}
-            <option value="{{ s.id }}" {% if filters.semester == s.id|stringformat:'s' %}selected{% endif %}>{{ s.school_year.sy }} &middot; {{ s.get_name_display }}{% if s.is_active %} (active){% endif %}</option>
+            <option value="{{ s.id }}" {% if filters.semester == s.id|stringformat:'s' %}selected{% endif %}>{{ s.school_year.sy }} &middot; {{ s.name }}{% if s.is_active %} (active){% endif %}</option>
           {% endfor %}
         </select>
       </div>

@@ -293,6 +293,27 @@ The adviser can use **only the portal**; Django Administration is for the Super 
 2. Visit **`/portal/login/`** (the site root `/` redirects here) and sign in
    with **username** + password. Change the password after first use.
 
+### Mobile-first UI and PWA readiness
+
+The portal is designed phone-first (`portal/static/portal/css/mobile.css`, `js/mobile.js`):
+
+* **Navigation** - a thumb-reach **bottom bar** (Home, Students, Events, Fines, *More*) on phones; the
+  sidebar becomes a **drawer**: edge-swipe to open, drag to close, focus trap, the page behind is `inert`,
+  Esc/close button, a signed-in card with *Log out*. The top and bottom bars hide on scroll down and return
+  on scroll up. Tablets keep the drawer; desktops keep the collapsible sidebar.
+* **Data** - every table turns into **stacked cards** on phones (labels come from the column headers, empty
+  cells are dropped, actions sit at the bottom); filter forms collapse behind a **Filters (n)** button that
+  stays open while you refine; the search box is full width.
+* **Forms** - modals slide up as **bottom sheets** with a sticky Save/Cancel bar; inputs are 16 px (no iOS
+  zoom) and every control is at least 44 px tall.
+* **Native feel** - safe-area insets (notch / home indicator), `100dvh`, no tap delay, no overscroll bounce,
+  reduced-motion respected. Printing is untouched (all of this is `@media screen`).
+* **PWA groundwork** - `GET /portal/manifest.webmanifest` (public; name/colours follow the Settings page),
+  192/512 and maskable icons, Apple touch icon and meta tags, `standalone` display and home-screen shortcuts.
+  The portal can already be added to the home screen. **Next steps for a full PWA:** a service worker served
+  from `/portal/sw.js` (offline shell + cache of static assets only - never cache authenticated pages),
+  an offline fallback page, and optionally web-push.
+
 ### Where each section lives (all under `/portal/`)
 | Section | URL | Notes |
 |---------|-----|-------|

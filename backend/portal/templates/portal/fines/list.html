@@ -32,7 +32,7 @@
     {# The whole filter + result block is swapped on every filter change / payment (see hx-select). #}
     <div id="fines-page">
       {% include "portal/partials/print_head.html" with title=print_title subtitle=print_subtitle %}
-      <form class="row g-2 mb-3 no-print" method="get" action="{% url 'portal:fines-list' %}"
+      <form class="row g-2 mb-3 no-print filters-form" method="get" action="{% url 'portal:fines-list' %}"
             hx-get="{% url 'portal:fines-list' %}" hx-target="#fines-page" hx-select="#fines-page"
             hx-swap="outerHTML" hx-push-url="true"
             hx-trigger="change delay:150ms, submit, refresh-fines from:body">
@@ -42,7 +42,7 @@
           <select name="semester" class="form-select form-select-sm">
             <option value="" {% if not filters.semester %}selected{% endif %}>All semesters</option>
             {% for s in semesters %}
-              <option value="{{ s.id }}" {% if filters.semester == s.id|stringformat:'s' %}selected{% endif %}>{{ s.school_year.sy }} &middot; {{ s.get_name_display }}{% if s.is_active %} (active){% endif %}</option>
+              <option value="{{ s.id }}" {% if filters.semester == s.id|stringformat:'s' %}selected{% endif %}>{{ s.school_year.sy }} &middot; {{ s.name }}{% if s.is_active %} (active){% endif %}</option>
             {% endfor %}
           </select>
         </div>

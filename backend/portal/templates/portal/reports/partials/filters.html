@@ -3,7 +3,7 @@ Shared report filter bar. Caller passes `action_url` (the report endpoint).
 Submits as a normal GET (full page) so the printable table reflects filters;
 "Download CSV" re-submits the same filters with format=csv.
 {% endcomment %}
-<form class="row g-2 mb-3 align-items-end no-print" method="get" action="{{ action_url }}">
+<form class="row g-2 mb-3 align-items-end no-print filters-form" method="get" action="{{ action_url }}">
   <div class="col-12 col-md-3">
     <label class="form-label small mb-1">Semester</label>
     <select name="semester" class="form-select form-select-sm">

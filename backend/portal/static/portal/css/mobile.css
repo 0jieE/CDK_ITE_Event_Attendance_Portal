@@ -1,0 +1,223 @@
+/* =====================================================================
+   ITE Attendance portal - mobile-first enhancements (PWA-ready)
+
+   Layers (all on top of the portal theme, using its CSS variables):
+   1. App shell      - safe areas, dvh, touch ergonomics, no tap delay
+   2. Navigation     - drawer upgrades, bottom navigation bar, hide-on-scroll
+   3. Data           - tables become stacked cards on phones, filters collapse
+   4. Forms / modals - bottom sheets, 16px inputs (no iOS zoom), thumb-sized targets
+   Screen-only: nothing here applies when printing.
+   ===================================================================== */
+
+/* ---------- 1. App shell ---------- */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* no pull-to-refresh bounce, and the left-edge swipe belongs to the drawer (not the browser's back gesture) */
+html, body { overscroll-behavior-x: none; }
+body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
+a, button, [role="button"], input, select, label, summary { touch-action: manipulation; }   /* no 300ms tap delay, no double-tap zoom */
+:focus-visible { outline: 3px solid rgba(var(--brand-rgb), .55); outline-offset: 2px; }
+img, svg, video, canvas { max-width: 100%; }
+.portal-main { min-width: 0; }
+.bottom-nav, .drawer-only, .filters-toggle { display: none; }
+
+@media screen and (max-width: 991.98px) {
+  /* the sticky top bar grows into the notch / status bar when installed as an app */
+  .topbar {
+    padding-top: env(safe-area-inset-top);
+    height: calc(var(--topbar-h) + env(safe-area-inset-top));
+    padding-left: max(.9rem, env(safe-area-inset-left)); padding-right: max(.9rem, env(safe-area-inset-right));
+    transition: transform .28s cubic-bezier(.2,.8,.2,1);
+  }
+  .sidebar { height: 100vh; height: 100dvh; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  .portal-main { padding-left: max(.9rem, env(safe-area-inset-left)); padding-right: max(.9rem, env(safe-area-inset-right)); }
+  .content { min-height: 100vh; min-height: 100dvh; }
+  .btn, .nav-link, .dropdown-item, .page-link { min-height: 44px; }
+  .btn-sm { min-height: 38px; padding-inline: .75rem; }
+  .topbar .btn-icon, #sidebarToggle { width: 44px; height: 44px; }
+  .page-head .page-title { font-size: 1.35rem; }
+}
+
+/* ---------- 2a. Drawer upgrades (phones + tablets) ---------- */
+@media screen and (max-width: 991.98px) {
+  .drawer-only { display: block; }
+  .sidebar { will-change: transform; }
+  html[data-sidebar-open] .sidebar { box-shadow: 0 0 0 100vmax rgba(6, 18, 10, 0); }
+  .sidebar.is-dragging { transition: none !important; }
+  .sidebar .nav-link { min-height: 48px; font-size: 1rem; padding: .7rem .95rem; }
+  .sidebar .collapse .nav-link { min-height: 44px; font-size: .95rem; }
+  /* drawer header: logo + title + close */
+  .sidebar .brand { padding-top: calc(.9rem + 0px); position: sticky; top: 0; z-index: 2; background: var(--sidebar); }
+  .sidebar .brand-text { white-space: normal; overflow: visible; }
+  .drawer-close {
+    margin-left: auto; flex: 0 0 auto; width: 40px; height: 40px; border: 0; border-radius: 50%;
+    background: rgba(255,255,255,.08); color: #fff; display: grid; place-items: center; font-size: 1.1rem;
+  }
+  .drawer-close:hover { background: rgba(255,255,255,.16); }
+  /* signed-in card + logout at the bottom of the drawer */
+  .drawer-user { margin: .25rem .75rem calc(.9rem + env(safe-area-inset-bottom)); padding: .8rem; border-radius: 1rem; background: rgba(255,255,255,.07); }
+  .drawer-user .who { display: flex; align-items: center; gap: .7rem; color: #fff; min-width: 0; }
+  .drawer-user .who strong { display: block; font-size: .92rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drawer-user .who small { color: rgba(255,255,255,.62); font-size: .75rem; }
+  .drawer-user .avatar { width: 40px; height: 40px; flex: 0 0 auto; }
+  .drawer-user .btn { width: 100%; margin-top: .7rem; background: rgba(255,255,255,.1); border: 0; color: #fff; font-weight: 600; }
+  .drawer-user .btn:hover { background: rgba(255,255,255,.18); }
+  .sidebar-foot { margin-top: 0; }
+  /* the page behind a drawer must not be reachable (also set via the inert attribute) */
+  html[data-sidebar-open] .content { pointer-events: none; }
+}
+
+/* ---------- 2b. Bottom navigation (phones) ---------- */
+@media screen and (max-width: 767.98px) {
+  .bottom-nav {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    position: fixed; z-index: 1030; left: 0; right: 0; bottom: 0;
+    padding: .3rem max(.4rem, env(safe-area-inset-right)) calc(.3rem + env(safe-area-inset-bottom)) max(.4rem, env(safe-area-inset-left));
+    background: color-mix(in srgb, var(--app-surface) 92%, transparent);
+    -webkit-backdrop-filter: saturate(1.5) blur(14px); backdrop-filter: saturate(1.5) blur(14px);
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -6px 24px -12px rgba(0,0,0,.25);
+    transition: transform .28s cubic-bezier(.2,.8,.2,1);
+  }
+  .bottom-nav a, .bottom-nav button {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .12rem;
+    min-height: 56px; padding: .25rem 0; border: 0; background: none; border-radius: .9rem;
+    color: var(--muted); font-size: .68rem; font-weight: 600; letter-spacing: .01em; text-decoration: none; position: relative;
+  }
+  .bottom-nav i { font-size: 1.35rem; line-height: 1; transition: transform .18s ease; }
+  .bottom-nav a.active, .bottom-nav button.active { color: var(--brand-ink, var(--brand)); }
+  .bottom-nav a.active i { transform: translateY(-1px) scale(1.08); }
+  .bottom-nav a.active::before {
+    content: ""; position: absolute; top: 2px; width: 28px; height: 3px; border-radius: 0 0 4px 4px; background: var(--brand);
+  }
+  .bottom-nav a:active, .bottom-nav button:active { background: rgba(var(--brand-rgb), .12); }
+  /* keep content, toasts and the page end clear of the bar */
+  .portal-main { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+  .toast-container { top: calc(var(--topbar-h) + env(safe-area-inset-top)) !important; right: 0 !important; left: 0; padding: .6rem !important; }
+  .toast-container .toast { margin-inline: auto; }
+  /* hide-on-scroll: more room to read; reappears on the slightest scroll up */
+  html.chrome-hidden .topbar { transform: translateY(-100%); }
+  html.chrome-hidden .bottom-nav { transform: translateY(110%); }
+  html[data-sidebar-open] .bottom-nav { transform: translateY(110%); }
+}
+
+/* tablets keep the drawer; give them the same comfortable sizing without the bar */
+@media screen and (min-width: 768px) and (max-width: 991.98px) {
+  .portal-main { padding-bottom: 2rem; }
+}
+
+/* ---------- 3a. Page header ---------- */
+@media screen and (max-width: 767.98px) {
+  .page-head { gap: .6rem; }
+  .page-head > div:first-child { flex: 1 1 100%; min-width: 0; }
+  .page-head .page-actions, .page-head > .d-flex { width: 100%; }
+  .page-head .page-actions .btn, .page-head > .d-flex .btn { flex: 1 1 auto; }
+  .page-head .page-actions .btn-group { flex: 1 1 100%; }
+  .page-head .page-actions .btn-group .btn { flex: 1; }
+  .nav-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-tabs .nav-link { white-space: nowrap; }
+  .metric .metric-value { font-size: 1.5rem; }
+}
+
+/* ---------- 3b. Filters collapse behind a button ---------- */
+@media screen and (max-width: 767.98px) {
+  .filters-toggle {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    min-height: 46px; margin: 0 0 .75rem; padding: .55rem .9rem; border-radius: .9rem;
+    border: 1px solid var(--line); background: var(--app-surface); color: var(--ink); font-weight: 600; font-size: .92rem;
+  }
+  .filters-toggle .count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; margin-left: .45rem; border-radius: 999px; background: var(--brand); color: var(--on-brand); font-size: .72rem; }
+  .filters-toggle .bi-chevron-down { transition: transform .2s ease; }
+  .filters-toggle[aria-expanded="true"] .bi-chevron-down { transform: rotate(180deg); }
+  form.filters-collapsible:not(.is-open) { display: none !important; }
+  form.filters-collapsible { padding: .85rem; border: 1px solid var(--line); border-radius: 1rem; background: color-mix(in srgb, var(--app-surface) 94%, var(--brand) 6%); }
+}
+
+/* ---------- 3c. Tables become stacked cards on phones ---------- */
+@media screen and (max-width: 767.98px) {
+  table.table:not(.no-stack) { display: block; width: 100% !important; }
+  table.table:not(.no-stack) thead {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;   /* visually hidden, still read by screen readers */
+  }
+  table.table:not(.no-stack) tbody, table.table:not(.no-stack) tfoot { display: block; }
+  table.table:not(.no-stack) tr {
+    display: block; margin: 0 0 .8rem; padding: .3rem .95rem;
+    border: 1px solid var(--line); border-radius: 1.1rem; background: var(--app-surface);
+    box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 18px -14px rgba(0,0,0,.25);
+  }
+  table.table:not(.no-stack) tr > * {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-width: 0;
+    padding: .55rem 0 !important; border: 0 !important; border-bottom: 1px dashed var(--line) !important;
+    text-align: right !important; white-space: normal !important; background: transparent !important; overflow-wrap: anywhere;
+  }
+  table.table:not(.no-stack) tr > *::before {
+    content: attr(data-label); flex: 0 0 34%; max-width: 40%; text-align: left;
+    font-size: .68rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted);
+  }
+  table.table:not(.no-stack) tr > *:last-child { border-bottom: 0 !important; }
+  /* first cell is the card title */
+  table.table:not(.no-stack) tbody tr > *:first-child {
+    justify-content: flex-start; text-align: left !important; font-weight: 700; font-size: 1rem;
+    border-bottom: 1px solid var(--line) !important; padding-bottom: .65rem !important;
+  }
+  table.table:not(.no-stack) tbody tr > *:first-child::before { display: none; }
+  /* actions row sits at the bottom, buttons left-aligned and thumb-sized */
+  table.table:not(.no-stack) td[data-label="Actions"], table.table:not(.no-stack) td[data-label="Action"] {
+    justify-content: flex-start; flex-wrap: wrap; gap: .5rem; padding-top: .7rem !important; border-top: 1px solid var(--line) !important; border-bottom: 0 !important;
+  }
+  table.table:not(.no-stack) td[data-label="Actions"]::before, table.table:not(.no-stack) td[data-label="Action"]::before { display: none; }
+  table.table:not(.no-stack) td[data-label="Actions"] .btn, table.table:not(.no-stack) td[data-label="Action"] .btn { min-height: 40px; min-width: 40px; }
+  /* full-width cells (empty states, footers) and cells with nothing to show */
+  table.table:not(.no-stack) td[colspan] { justify-content: center; text-align: center !important; }
+  table.table:not(.no-stack) td[colspan]::before { display: none; }
+  table.table:not(.no-stack) td.is-empty { display: none; }
+  table.table:not(.no-stack) tfoot tr { background: rgba(var(--brand-rgb), .06); }
+  table.table-striped > tbody > tr:nth-of-type(odd) > * { --bs-table-accent-bg: transparent; box-shadow: none; }
+  table.table:not(.no-stack) .form-switch { margin: 0; }
+  /* DataTables chrome */
+  div.dataTables_wrapper div.dataTables_length { display: none; }            /* "Show 10" is noise on a phone */
+  div.dataTables_wrapper div.dataTables_filter input { min-height: 46px; font-size: 16px; border-radius: .9rem; }
+  div.dataTables_wrapper .pagination { flex-wrap: wrap; gap: .25rem; }
+  div.dataTables_wrapper .page-link { min-width: 44px; text-align: center; border-radius: .7rem !important; }
+  div.dataTables_wrapper .dataTables_info { padding-top: 0; font-size: .8rem; }
+  .table-responsive { margin-inline: 0 !important; overflow: visible; }
+}
+
+/* ---------- 4. Forms and modals ---------- */
+@media screen and (max-width: 767.98px) {
+  .form-control, .form-select, .form-control-sm, .form-select-sm, .ts-wrapper .ts-control, .ts-wrapper .ts-control input {
+    font-size: 16px !important;                  /* iOS Safari zooms into smaller inputs */
+  }
+  .form-control, .form-select { min-height: 46px; }
+  .form-control-sm, .form-select-sm { min-height: 44px; }
+  .ts-wrapper .ts-control { min-height: 44px; align-items: center; }
+  .ts-dropdown { font-size: 16px; }
+  .ts-dropdown .option { padding: .7rem .85rem; }
+  input[type="checkbox"].form-check-input, input[type="radio"].form-check-input { width: 1.35rem; height: 1.35rem; }
+  .form-check-input[role="switch"] { width: 2.6rem; height: 1.45rem; }
+  .choice-card { min-height: 48px; }
+
+  /* modals slide up as a bottom sheet */
+  #appModal .modal-dialog {
+    margin: 0 !important; max-width: none !important; width: 100%; min-height: 100vh; min-height: 100dvh;
+    display: flex; align-items: flex-end;
+  }
+  #appModal.fade .modal-dialog { transform: translateY(100%); transition: transform .32s cubic-bezier(.2,.8,.2,1); }
+  #appModal.show .modal-dialog { transform: none; }
+  #appModal .modal-content {
+    width: 100%; max-height: 92vh; max-height: 92dvh; border: 0; border-radius: 1.4rem 1.4rem 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  #appModal .modal-header { position: relative; padding-top: 1.35rem; }
+  #appModal .modal-header::before {              /* grab handle */
+    content: ""; position: absolute; top: .5rem; left: 50%; width: 42px; height: 4px; margin-left: -21px;
+    border-radius: 4px; background: var(--line); opacity: .9;
+  }
+  #appModal .modal-footer { position: sticky; bottom: 0; background: var(--app-surface); border-top: 1px solid var(--line); gap: .6rem; }
+  #appModal .modal-footer .btn { flex: 1 1 0; min-height: 48px; }
+  .modal-backdrop.show { opacity: .5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar, .bottom-nav, .sidebar, #appModal .modal-dialog { transition: none !important; }
+}
