@@ -5,15 +5,15 @@
 <div class="ite-card">
   <h3>Database backup</h3>
   <p class="ite-note" style="margin:0 0 12px">
-    The free database can be deleted when its trial ends. Download a backup before the demo (and after any
-    big data entry) &mdash; it can be restored into a new database from the same page.
+    Keep a copy of all your data in case of disaster. Download a backup regularly &mdash; it can be restored
+    from the same page.
   </p>
   <form method="post" action="{% url 'admin:backup' %}" style="display:inline">
     {% csrf_token %}
     <input type="hidden" name="action" value="download">
     <button type="submit" class="ite-btn">&#11015; Download backup now</button>
   </form>
-  <a class="ite-btn" style="background:transparent;color:var(--secondary);border:1px solid var(--secondary);margin-left:6px" href="{% url 'admin:backup' %}">Backup &amp; restore&hellip;</a>
+  <a class="ite-btn" style="background:transparent;color:var(--link-fg);border:1px solid var(--link-fg);margin-left:6px" href="{% url 'admin:backup' %}">Backup &amp; restore&hellip;</a>
 </div>
 {% endif %}
 {{ block.super }}

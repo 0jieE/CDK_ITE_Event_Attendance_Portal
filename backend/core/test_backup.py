@@ -161,6 +161,8 @@ class AdminSiteTests(TestCase):
         self.assertIn("ITE Attendance · Administration", html)
         self.assertIn("ite-logo", html)
         self.assertIn("Download backup now", html)
+        self.assertIn("in case of disaster", html)
+        self.assertNotIn("free database", html)
         self.assertIn("Open portal", html)
         self.assertIn("--primary: #41b422", html)
 
