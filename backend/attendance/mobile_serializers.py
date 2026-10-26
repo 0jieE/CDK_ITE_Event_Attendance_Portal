@@ -158,6 +158,20 @@ class StudentAttendanceSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class StudentMissedSlotSerializer(serializers.Serializer):
+    """One required slot the student missed (computed, never stored)."""
+
+    event = serializers.IntegerField()
+    event_name = serializers.CharField()
+    date = serializers.DateField()
+    attendance_type = serializers.CharField()
+    attendance_type_display = serializers.CharField()
+    window_start = serializers.TimeField(allow_null=True)
+    window_end = serializers.TimeField(allow_null=True)
+    rate = serializers.DecimalField(max_digits=10, decimal_places=2)
+    paid = serializers.BooleanField()
+
+
 class StudentFineSerializer(serializers.ModelSerializer):
     event_name = serializers.CharField(source="event.name", read_only=True)
     balance = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)

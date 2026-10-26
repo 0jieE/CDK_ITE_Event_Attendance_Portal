@@ -205,7 +205,7 @@ student a username and password:
 | `GET /api/student/profile/` | student | own profile incl. name, username, year/section, photo |
 | `PATCH /api/student/profile/` | student | edit own first/middle/last name and username (student no., year, section are admin-only) |
 | `POST /api/student/profile/password/` | student | change own password (current + new; Django validators; rate-limited) |
-| `GET /api/student/events/` (`?all=true` for past events too), `attendance/` (`?event=`), `fines/`, `balance/` | student | own data only |
+| `GET /api/student/events/` (`?all=true` for past events too), `attendance/` (`?event=`), `missed-slots/` (`?event=`: the required slots missed so far - date, slot, scan window, rate, `paid` - newest first, same rule as the fines), `fines/`, `balance/` | student | own data only |
 | `POST /api/student/qr/generate/` | student | create today's QR for an event - **today only** (other dates are rejected), once per event-day, idempotent |
 | `GET /api/student/qr/` (`?event=&date=`) | student | list own QR codes (used to show an already-generated QR) |
 

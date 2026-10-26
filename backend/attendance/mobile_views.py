@@ -22,7 +22,7 @@ from rest_framework.views import APIView
 from accounts.models import Instructor, Student
 from accounts.permissions import IsInstructor, IsStudent
 
-from .models import AttendanceLog, AttendanceType, Event, Fine, QRCode, default_required_types
+from .models import AttendanceLog, AttendanceType, Event, Fine, FineSlotPayment, QRCode, default_required_types
 from .mobile_serializers import (
     BalanceSerializer,
     QRCodeMobileSerializer,
@@ -32,6 +32,7 @@ from .mobile_serializers import (
     ScanSyncSerializer,
     StudentAttendanceSerializer,
     StudentFineSerializer,
+    StudentMissedSlotSerializer,
     StudentPasswordChangeSerializer,
     StudentProfileSerializer,
     StudentProfileUpdateSerializer,
@@ -563,6 +564,54 @@ class StudentAttendanceView(StudentScopedMixin, generics.ListAPIView):
         if event:
             qs = qs.filter(event_id=event)
         return qs.order_by("-date", "attendance_type")
+
+
+class StudentMissedSlotsView(StudentScopedMixin, generics.ListAPIView):
+    """The required slots the student missed, newest date first (then slot order).
+
+    Absences are computed, not stored: same rule as the fines (``services.missed_slot_details``), so
+    a slot that is still open today, or lies in the future, is not listed, and only active events
+    count. ``paid`` is true when the treasurer has recorded the cash for that slot.
+    """
+
+    serializer_class = StudentMissedSlotSerializer
+
+    @extend_schema(parameters=[_EVENT_PARAM])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        student = self.get_student()
+        events = Event.objects.filter(is_active=True, start_date__lte=timezone.localdate())
+        event_id = self.request.query_params.get("event")
+        if event_id:
+            if not event_id.isdigit():
+                return []
+            events = events.filter(pk=event_id)
+        now = timezone.localtime()
+        paid = set(
+            FineSlotPayment.objects.filter(fine__student=student)
+            .values_list("fine__event_id", "date", "attendance_type")
+        )
+        slot_order = {t.value: i for i, t in enumerate(AttendanceType)}
+        rows = []
+        for event in events.prefetch_related("day_fines"):
+            for day, slot, rate in services.missed_slot_details(student, event, now):
+                start, end = event.slot_window(slot)
+                rows.append({
+                    "event": event.id,
+                    "event_name": event.name,
+                    "date": day,
+                    "attendance_type": slot,
+                    "attendance_type_display": AttendanceType(slot).label,
+                    "window_start": start,
+                    "window_end": end,
+                    "rate": rate,
+                    "paid": (event.id, day, slot) in paid,
+                })
+        rows.sort(key=lambda r: (r["event"], slot_order[r["attendance_type"]]))
+        rows.sort(key=lambda r: r["date"], reverse=True)
+        return rows
 
 
 class StudentFinesView(StudentScopedMixin, generics.ListAPIView):

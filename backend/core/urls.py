@@ -43,6 +43,7 @@ from attendance.mobile_views import (
     InstructorScanView,
     InstructorScansView,
     StudentAttendanceView,
+    StudentMissedSlotsView,
     StudentBalanceView,
     StudentEventsView,
     StudentFinesView,
@@ -85,6 +86,7 @@ api_patterns = [
     path("student/qr/generate/", StudentQRGenerateView.as_view(), name="student-qr-generate"),
     path("student/qr/", StudentQRListView.as_view(), name="student-qr-list"),
     path("student/attendance/", StudentAttendanceView.as_view(), name="student-attendance"),
+    path("student/missed-slots/", StudentMissedSlotsView.as_view(), name="student-missed-slots"),
     path("student/fines/", StudentFinesView.as_view(), name="student-fines"),
     path("student/balance/", StudentBalanceView.as_view(), name="student-balance"),
     # Dashboard & reports
