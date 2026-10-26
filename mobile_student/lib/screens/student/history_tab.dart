@@ -11,6 +11,7 @@ import '../../utils/attendance_groups.dart';
 import '../../utils/errors.dart';
 import '../../utils/event_dates.dart';
 import '../../utils/manila_time.dart';
+import '../../widgets/missed_slot_tile.dart';
 import '../../widgets/state_message.dart';
 import '../../widgets/status_chip.dart';
 
@@ -154,13 +155,6 @@ String _range(Event e) {
       : '${df.format(e.startDate)} – ${dfy.format(e.endDate)}';
 }
 
-/// "07:00:00" -> "7:00 AM".
-String _clock(String raw) {
-  final p = raw.split(':').map(int.tryParse).toList();
-  if (p.length < 2 || p[0] == null || p[1] == null) return raw;
-  return DateFormat('h:mm a').format(DateTime(2000, 1, 1, p[0]!, p[1]!));
-}
-
 /// One event: header with its phase and missed count; expands to the slot list.
 class _EventCard extends StatelessWidget {
   final Event event;
@@ -226,7 +220,7 @@ class _EventCard extends StatelessWidget {
                 else if (missed!.isEmpty)
                   const _Note("You haven't missed any slot so far.")
                 else
-                  for (final m in missed!) _MissedRow(slot: m),
+                  for (final m in missed!) MissedSlotTile(slot: m),
                 _SectionHeader(attended.isEmpty
                     ? 'Attended'
                     : 'Attended (${attended.length})'),
@@ -268,42 +262,6 @@ class _Note extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       child: Text(text,
           style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-    );
-  }
-}
-
-/// A missed slot: which slot, which day, when its scan window was, and its fine.
-class _MissedRow extends StatelessWidget {
-  final MissedSlot slot;
-  const _MissedRow({required this.slot});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final label = slot.attendanceTypeDisplay.isNotEmpty
-        ? slot.attendanceTypeDisplay
-        : slot.attendanceType;
-    final day = DateFormat('EEE, MMM d, y').format(slot.date);
-    final start = slot.windowStart, end = slot.windowEnd;
-    final window = start != null && end != null
-        ? 'Scan window ${_clock(start)} – ${_clock(end)}'
-        : null;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      leading: Icon(Icons.cancel_outlined, color: brand.absentFg),
-      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-      subtitle: Text(window == null ? day : '$day\n$window'),
-      isThreeLine: window != null,
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text('₱${slot.rate}',
-              style: const TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
-          StatusChip(slot.paid ? 'PAID' : 'UNPAID'),
-        ],
-      ),
     );
   }
 }

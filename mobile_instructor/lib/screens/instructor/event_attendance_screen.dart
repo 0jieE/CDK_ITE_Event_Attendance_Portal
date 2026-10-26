@@ -119,7 +119,11 @@ class _EventAttendanceScreenState extends State<EventAttendanceScreen> {
   @override
   Widget build(BuildContext context) {
     final event = widget.event;
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    // The subtitle sits on the app bar: a softer shade of the bar's own ink.
+    final theme = Theme.of(context);
+    final barSub = (theme.appBarTheme.foregroundColor ??
+            theme.colorScheme.onSurface)
+        .withValues(alpha: 0.9);
     final dates = _data?.selectableDates ?? event.dateRange;
     return Scaffold(
       appBar: AppBar(
@@ -132,7 +136,7 @@ class _EventAttendanceScreenState extends State<EventAttendanceScreen> {
             Text(
               eventRangeLabel(event),
               style: TextStyle(
-                color: muted,
+                color: barSub,
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),

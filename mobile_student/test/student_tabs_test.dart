@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:ite_students/screens/student/fines_tab.dart';
 import 'package:ite_students/screens/student/history_tab.dart';
 import 'package:ite_students/screens/student/profile_tab.dart';
 import 'package:ite_students/services/api_service.dart';
@@ -155,6 +156,65 @@ void main() {
     expect(find.text('Running Event'), findsOneWidget);
     expect(find.textContaining("Missed slots couldn't be loaded"), findsOneWidget);
     expect(find.text('No scans recorded yet.'), findsOneWidget);
+  });
+
+  testWidgets('Fines: tapping a fine drops down its missed slots',
+      (tester) async {
+    bigScreen(tester);
+    final client = MockClient((req) async {
+      final path = req.url.path;
+      if (path.endsWith('/student/balance/')) {
+        return json({
+          'total_fines': '100.00',
+          'total_paid': '50.00',
+          'outstanding': '50.00',
+        });
+      }
+      if (path.endsWith('/student/fines/')) {
+        return json({
+          'results': [
+            {
+              'id': 9,
+              'event': 2,
+              'event_name': 'Running Event',
+              'missed_slots': 2,
+              'amount': '100.00',
+              'status': 'UNPAID',
+              'paid_at': null,
+            },
+          ],
+        });
+      }
+      if (path.endsWith('/student/missed-slots/')) {
+        return json({
+          'results': [
+            missedJson('2026-10-20', 'PM_IN', 'PM Time-In'),
+            missedJson('2026-10-20', 'PM_OUT', 'PM Time-Out', paid: true),
+          ],
+        });
+      }
+      return json({'detail': 'nf'}, 404);
+    });
+    await tester.pumpWidget(
+      Provider<ApiService>.value(
+        value: ApiService(tokens: FakeTokens(), client: client),
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: const Scaffold(body: FinesTab()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 missed slots'), findsOneWidget);
+    expect(find.text('PM Time-In'), findsNothing); // collapsed
+    await tester.tap(find.text('Running Event'));
+    await tester.pumpAndSettle();
+    expect(find.text('PM Time-In'), findsOneWidget);
+    expect(find.text('PM Time-Out'), findsOneWidget);
+    expect(find.text('Tue, Oct 20, 2026\nScan window 1:00 PM – 2:00 PM'),
+        findsNWidgets(2));
+    expect(find.text('Paid'), findsOneWidget);
   });
 
   group('Profile tab', () {

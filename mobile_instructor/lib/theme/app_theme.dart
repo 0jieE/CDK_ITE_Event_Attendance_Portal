@@ -20,11 +20,15 @@ class AppTheme {
   static const Color greenTint = Color(0xFFE7F6E2);
   static const Color greenTintInk = Color(0xFF0F3D08);
 
-  /// Top app bar + bottom navigation background (light green).
-  static const Color barBackground = greenTint;
+  /// Top app bar + bottom navigation background (solid green #02A43B).
+  static const Color barBackground = Color(0xFF02A43B);
 
-  /// Selected-tab pill on the light-green nav bar (one step deeper than the bar).
-  static const Color barIndicator = Color(0xFFC6EAB8);
+  /// Text/icons on [barBackground]. White is ~3.3:1 there: fine for the bold
+  /// 20px title and icons, below 4.5:1 for the small nav labels.
+  static const Color onBar = Colors.white;
+
+  /// Selected-tab pill on the green nav bar; its icon uses [greenText].
+  static const Color barIndicator = Colors.white;
 
   static const Color ink = Color(0xFF17231A);
   static const Color muted = Color(0xFF5B6B5F);
@@ -100,6 +104,8 @@ class AppTheme {
     final onSurface = isLight ? ink : _darkInk;
     final variant = isLight ? muted : _darkMuted;
     final bar = isLight ? barBackground : _darkSurface;
+    final onBarInk = isLight ? onBar : onSurface;
+    final onBarMuted = isLight ? onBar.withValues(alpha: 0.9) : variant;
 
     final scheme = ColorScheme.fromSeed(
       seedColor: green,
@@ -154,22 +160,22 @@ class AppTheme {
       textTheme: base.textTheme.apply(bodyColor: onSurface, displayColor: onSurface),
       appBarTheme: AppBarTheme(
         backgroundColor: bar,
-        foregroundColor: onSurface,
+        foregroundColor: onBarInk,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
-          color: onSurface,
+          color: onBarInk,
           fontSize: 20,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.2,
         ),
-        iconTheme: IconThemeData(color: onSurface),
-        systemOverlayStyle: isLight
-            ? SystemUiOverlayStyle.dark
-            : SystemUiOverlayStyle.light,
-        shape: Border(bottom: BorderSide(color: brand.border)),
+        iconTheme: IconThemeData(color: onBarInk),
+        actionsIconTheme: IconThemeData(color: onBarInk),
+        // Light status-bar icons over the green bar.
+        systemOverlayStyle: SystemUiOverlayStyle.light,
+        shape: isLight ? null : Border(bottom: BorderSide(color: brand.border)),
       ),
       cardTheme: CardThemeData(
         color: surface,
@@ -266,15 +272,15 @@ class AppTheme {
             borderRadius: BorderRadius.circular(16)),
         iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(
               color: s.contains(WidgetState.selected)
-                  ? (isLight ? greenTintInk : _darkAccent)
-                  : variant,
+                  ? (isLight ? greenText : _darkAccent)
+                  : onBarMuted,
             )),
         labelTextStyle: WidgetStateProperty.resolveWith((s) => TextStyle(
               fontSize: 12,
               fontWeight: s.contains(WidgetState.selected)
                   ? FontWeight.w700
                   : FontWeight.w500,
-              color: s.contains(WidgetState.selected) ? onSurface : variant,
+              color: s.contains(WidgetState.selected) ? onBarInk : onBarMuted,
             )),
       ),
       dividerTheme: DividerThemeData(color: brand.border, space: 1, thickness: 1),
