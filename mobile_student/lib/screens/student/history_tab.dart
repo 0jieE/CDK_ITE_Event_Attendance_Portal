@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/attendance_log.dart';
 import '../../models/event.dart';
+import '../../models/missed_slot.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/attendance_groups.dart';
@@ -13,11 +14,10 @@ import '../../utils/manila_time.dart';
 import '../../widgets/state_message.dart';
 import '../../widgets/status_chip.dart';
 
-/// The student's attendance history, filtered by event.
-///
-/// The filter lists every event (`?all=true`) and defaults to the one closest
-/// to today (see [pickClosestEvent]); "All events" shows everything. Logs are
-/// grouped by date, newest first.
+/// The student's attendance history as one expandable card per event
+/// (`?all=true`, newest first). Expanding a card drops down the slots the
+/// student missed (date, slot, scan window, fine), then the slots attended.
+/// The event closest to today (see [pickClosestEvent]) starts expanded.
 class HistoryTab extends StatefulWidget {
   const HistoryTab({super.key});
 
@@ -27,224 +27,121 @@ class HistoryTab extends StatefulWidget {
 
 class _HistoryTabState extends State<HistoryTab> {
   List<Event> _events = const [];
-  Event? _selected; // null = "All events"
-  bool _loadingEvents = true;
-  String? _eventsError;
+  Map<int, List<AttendanceLog>> _attended = const {};
 
-  List<AttendanceLog>? _logs;
-  bool _loadingLogs = false;
-  String? _logsError;
+  /// Missed slots per event; null when they couldn't be loaded (the cards
+  /// still show, with a note instead of the list).
+  Map<int, List<MissedSlot>>? _missed;
+  bool _loading = true;
+  String? _error;
 
-  /// Ignores responses that belong to an older filter selection.
-  int _seq = 0;
+  /// Ids of the expanded cards; null until the first load picks the default.
+  Set<int>? _open;
 
   @override
   void initState() {
     super.initState();
-    _loadEvents();
+    _load();
   }
 
-  /// Loads the event list and (re)selects: the current event if it still
-  /// exists, else the default closest to today. [silent] = pull-to-refresh.
-  Future<void> _loadEvents({bool silent = false}) async {
+  /// Loads events, scans and missed slots together. [silent] = pull-to-refresh
+  /// (keeps the current list on screen and which cards are open).
+  Future<void> _load({bool silent = false}) async {
     if (!silent) {
       setState(() {
-        _loadingEvents = true;
-        _eventsError = null;
+        _loading = true;
+        _error = null;
       });
     }
+    final api = context.read<ApiService>();
+    // Missed slots are optional: a failure there must not hide the history.
+    final missedF = api.studentMissedSlots().then<List<MissedSlot>?>(
+      (v) => v,
+      onError: (Object e) {
+        if (e is SessionExpired) throw e;
+        return null;
+      },
+    );
     try {
-      final events = await context.read<ApiService>().studentEventsAll();
+      final results = await Future.wait<Object?>([
+        api.studentEventsAll(),
+        api.studentAttendance(),
+        missedF,
+      ]);
       if (!mounted) return;
-      final keepAll = silent && _selected == null && _events.isNotEmpty;
-      final keep = events.where((e) => e.id == _selected?.id).firstOrNull;
+      final events = results[0] as List<Event>;
+      final logs = results[1] as List<AttendanceLog>;
+      final missed = results[2] as List<MissedSlot>?;
       setState(() {
         _events = events;
-        _loadingEvents = false;
-        _eventsError = null;
-        _selected = keepAll
-            ? null
-            : (keep ?? pickClosestEvent(events, manilaToday()));
+        _attended = _byEvent(logs.where((l) => l.isPresent), (l) => l.event);
+        _missed = missed == null ? null : _byEvent(missed, (m) => m.event);
+        _open ??= {?pickClosestEvent(events, manilaToday())?.id};
+        _loading = false;
+        _error = null;
       });
-      await _loadLogs(silent: silent);
     } on SessionExpired {
       return;
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _eventsError = friendlyError(e);
-        _loadingEvents = false;
+        _error = friendlyError(e);
+        _loading = false;
       });
     }
   }
 
-  Future<void> _loadLogs({bool silent = false}) async {
-    final seq = ++_seq;
-    if (!silent) {
-      setState(() {
-        _loadingLogs = true;
-        _logsError = null;
-        _logs = null;
-      });
+  static Map<int, List<T>> _byEvent<T>(Iterable<T> items, int Function(T) id) {
+    final out = <int, List<T>>{};
+    for (final i in items) {
+      out.putIfAbsent(id(i), () => []).add(i);
     }
-    try {
-      final logs = await context
-          .read<ApiService>()
-          .studentAttendance(event: _selected?.id);
-      if (!mounted || seq != _seq) return;
-      setState(() {
-        _logs = logs;
-        _loadingLogs = false;
-        _logsError = null;
-      });
-    } on SessionExpired {
-      return;
-    } catch (e) {
-      if (!mounted || seq != _seq) return;
-      setState(() {
-        _logsError = friendlyError(e);
-        _loadingLogs = false;
-      });
-    }
-  }
-
-  Future<void> _pickEvent() async {
-    final choice = await showModalBottomSheet<_Choice>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _EventPicker(events: _events, selected: _selected),
-    );
-    if (choice == null || !mounted) return;
-    setState(() => _selected = choice.event);
-    _loadLogs();
+    return out;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loadingEvents) {
+    if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_eventsError != null) {
+    if (_error != null) {
       return StateMessage(
         icon: Icons.cloud_off,
         isError: true,
         title: 'Could not load history',
-        subtitle: _eventsError,
+        subtitle: _error,
         actionLabel: 'Retry',
-        onAction: _loadEvents,
+        onAction: _load,
       );
     }
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: _FilterButton(
-            event: _selected,
-            enabled: _events.isNotEmpty,
-            onTap: _pickEvent,
-          ),
-        ),
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: () => _loadEvents(silent: true),
-            child: _buildBody(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBody() {
-    if (_loadingLogs) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_logsError != null) {
-      return RefreshableCenter(
-        child: StateMessage(
-          icon: Icons.cloud_off,
-          isError: true,
-          title: 'Could not load attendance',
-          subtitle: _logsError,
-          actionLabel: 'Retry',
-          onAction: _loadLogs,
-        ),
-      );
-    }
-    final logs = _logs ?? const <AttendanceLog>[];
-    if (logs.isEmpty) {
-      return RefreshableCenter(
-        child: StateMessage(
-          icon: Icons.history,
-          title: _selected == null
-              ? 'No attendance recorded yet'
-              : 'No attendance recorded for this event yet',
-          subtitle: 'Scans made by your instructor will show up here.',
-        ),
-      );
-    }
-    final groups = groupLogsByDate(logs);
-    return ListView.builder(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      itemCount: groups.length,
-      itemBuilder: (context, i) =>
-          _DaySection(group: groups[i], showEvent: _selected == null),
-    );
-  }
-}
-
-/// Tappable "field" showing the selected event; opens the picker sheet.
-class _FilterButton extends StatelessWidget {
-  final Event? event;
-  final bool enabled;
-  final VoidCallback onTap;
-  const _FilterButton({
-    required this.event,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = context.brand;
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: brand.tint,
-                child: Icon(Icons.filter_list, color: brand.accent),
+    return RefreshIndicator(
+      onRefresh: () => _load(silent: true),
+      child: _events.isEmpty
+          ? const RefreshableCenter(
+              child: StateMessage(
+                icon: Icons.history,
+                title: 'No events yet',
+                subtitle: 'Events and your attendance will show up here.',
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Event',
-                        style: TextStyle(
-                            fontSize: 12, color: scheme.onSurfaceVariant)),
-                    Text(event?.name ?? 'All events',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 16)),
-                    if (event != null)
-                      Text(_range(event!),
-                          style: TextStyle(
-                              fontSize: 12, color: scheme.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-              Icon(Icons.keyboard_arrow_down, color: scheme.onSurfaceVariant),
-            ],
-          ),
-        ),
-      ),
+            )
+          : ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              itemCount: _events.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
+              itemBuilder: (context, i) {
+                final e = _events[i];
+                return _EventCard(
+                  key: ValueKey(e.id),
+                  event: e,
+                  attended: _attended[e.id] ?? const [],
+                  missed: _missed == null ? null : (_missed![e.id] ?? const []),
+                  initiallyExpanded: _open?.contains(e.id) ?? false,
+                  onExpansionChanged: (open) =>
+                      open ? _open?.add(e.id) : _open?.remove(e.id),
+                );
+              },
+            ),
     );
   }
 }
@@ -257,77 +154,180 @@ String _range(Event e) {
       : '${df.format(e.startDate)} – ${dfy.format(e.endDate)}';
 }
 
-/// Result of the picker: [event] null means "All events".
-class _Choice {
-  final Event? event;
-  const _Choice(this.event);
+/// "07:00:00" -> "7:00 AM".
+String _clock(String raw) {
+  final p = raw.split(':').map(int.tryParse).toList();
+  if (p.length < 2 || p[0] == null || p[1] == null) return raw;
+  return DateFormat('h:mm a').format(DateTime(2000, 1, 1, p[0]!, p[1]!));
 }
 
-class _EventPicker extends StatelessWidget {
-  final List<Event> events;
-  final Event? selected;
-  const _EventPicker({required this.events, required this.selected});
+/// One event: header with its phase and missed count; expands to the slot list.
+class _EventCard extends StatelessWidget {
+  final Event event;
+  final List<AttendanceLog> attended;
+  final List<MissedSlot>? missed;
+  final bool initiallyExpanded;
+  final ValueChanged<bool> onExpansionChanged;
+
+  const _EventCard({
+    super.key,
+    required this.event,
+    required this.attended,
+    required this.missed,
+    required this.initiallyExpanded,
+    required this.onExpansionChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     final today = manilaToday();
-    final brand = context.brand;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.7;
-    return SafeArea(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text('Filter by event',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w800)),
-            ),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                padding: const EdgeInsets.only(bottom: 12),
-                children: [
-                  ListTile(
-                    leading: Icon(Icons.all_inclusive, color: brand.accent),
-                    title: const Text('All events',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                    trailing: selected == null
-                        ? Icon(Icons.check_circle, color: brand.accent)
-                        : null,
-                    onTap: () => Navigator.pop(context, const _Choice(null)),
-                  ),
-                  for (final e in events)
-                    ListTile(
-                      leading: Icon(Icons.event_outlined, color: brand.accent),
-                      title: Text(e.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text(_range(e)),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _PhaseBadge(event: e, today: today),
-                          if (selected?.id == e.id) ...[
-                            const SizedBox(width: 8),
-                            Icon(Icons.check_circle, color: brand.accent),
-                          ],
-                        ],
-                      ),
-                      onTap: () => Navigator.pop(context, _Choice(e)),
-                    ),
-                ],
-              ),
-            ),
-          ],
+    final upcoming = daysBetween(today, event.startDate) > 0;
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: ExpansionTile(
+        initiallyExpanded: initiallyExpanded,
+        onExpansionChanged: onExpansionChanged,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        tilePadding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        title: Text(event.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(_range(event),
+                  style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+              _PhaseBadge(event: event, today: today),
+              if (!upcoming && missed != null)
+                missed!.isEmpty
+                    ? const StatusChip('PRESENT', label: 'No misses')
+                    : StatusChip('ABSENT', label: '${missed!.length} missed'),
+            ],
+          ),
         ),
+        children: upcoming
+            ? [const _Note("This event hasn't started yet.")]
+            : [
+                const Divider(indent: 16, endIndent: 16),
+                _SectionHeader(
+                    missed == null || missed!.isEmpty
+                        ? 'Missed slots'
+                        : 'Missed slots (${missed!.length})'),
+                if (missed == null)
+                  const _Note("Missed slots couldn't be loaded. "
+                      'Pull down to refresh.')
+                else if (missed!.isEmpty)
+                  const _Note("You haven't missed any slot so far.")
+                else
+                  for (final m in missed!) _MissedRow(slot: m),
+                _SectionHeader(attended.isEmpty
+                    ? 'Attended'
+                    : 'Attended (${attended.length})'),
+                if (attended.isEmpty)
+                  const _Note('No scans recorded yet.')
+                else
+                  for (final g in groupLogsByDate(attended))
+                    for (final l in g.logs) _AttendedRow(log: l),
+              ],
       ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String text;
+  const _SectionHeader(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Text(text,
+          style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.onSurfaceVariant)),
+    );
+  }
+}
+
+class _Note extends StatelessWidget {
+  final String text;
+  const _Note(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Text(text,
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+    );
+  }
+}
+
+/// A missed slot: which slot, which day, when its scan window was, and its fine.
+class _MissedRow extends StatelessWidget {
+  final MissedSlot slot;
+  const _MissedRow({required this.slot});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final label = slot.attendanceTypeDisplay.isNotEmpty
+        ? slot.attendanceTypeDisplay
+        : slot.attendanceType;
+    final day = DateFormat('EEE, MMM d, y').format(slot.date);
+    final start = slot.windowStart, end = slot.windowEnd;
+    final window = start != null && end != null
+        ? 'Scan window ${_clock(start)} – ${_clock(end)}'
+        : null;
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      leading: Icon(Icons.cancel_outlined, color: brand.absentFg),
+      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+      subtitle: Text(window == null ? day : '$day\n$window'),
+      isThreeLine: window != null,
+      trailing: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text('₱${slot.rate}',
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          StatusChip(slot.paid ? 'PAID' : 'UNPAID'),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttendedRow extends StatelessWidget {
+  final AttendanceLog log;
+  const _AttendedRow({required this.log});
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = context.brand;
+    final label = log.attendanceTypeDisplay.isNotEmpty
+        ? log.attendanceTypeDisplay
+        : log.attendanceType;
+    final day = DateFormat('EEE, MMM d, y').format(log.date);
+    final at = log.scannedAt;
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      leading: Icon(Icons.check_circle_outline, color: brand.presentFg),
+      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+      subtitle: Text(at == null
+          ? day
+          : '$day · ${DateFormat('h:mm a').format(toManila(at))}'),
+      trailing: StatusChip(log.status),
     );
   }
 }
@@ -344,68 +344,8 @@ class _PhaseBadge extends StatelessWidget {
       return const StatusChip('PRESENT', label: 'Ongoing');
     }
     final upcoming = daysBetween(today, event.startDate) > 0;
-    return StatusChip('', label: upcoming ? 'Upcoming' : 'Past');
-  }
-}
-
-/// One date: a header plus a card with that day's slot rows.
-class _DaySection extends StatelessWidget {
-  final DayLogs group;
-  final bool showEvent;
-  const _DaySection({required this.group, required this.showEvent});
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-            child: Text(
-              DateFormat('EEEE, MMM d, y').format(group.date),
-              style: TextStyle(
-                  fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant),
-            ),
-          ),
-          Card(
-            child: Column(
-              children: [
-                for (var i = 0; i < group.logs.length; i++) ...[
-                  if (i > 0) const Divider(indent: 16, endIndent: 16),
-                  _LogRow(log: group.logs[i], showEvent: showEvent),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LogRow extends StatelessWidget {
-  final AttendanceLog log;
-  final bool showEvent;
-  const _LogRow({required this.log, required this.showEvent});
-
-  @override
-  Widget build(BuildContext context) {
-    final scannedAt = log.scannedAt;
-    final time = scannedAt != null
-        ? DateFormat('h:mm a').format(toManila(scannedAt))
-        : 'No scan recorded';
-    final slot = log.attendanceTypeDisplay.isNotEmpty
-        ? log.attendanceTypeDisplay
-        : log.attendanceType;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      title: Text(slot, style: const TextStyle(fontWeight: FontWeight.w700)),
-      subtitle: Text(showEvent ? '${log.eventName}\n$time' : time),
-      isThreeLine: showEvent,
-      trailing: StatusChip(log.status),
-    );
+    return upcoming
+        ? const StatusChip('UPCOMING', label: 'Upcoming')
+        : const StatusChip('', label: 'Past');
   }
 }

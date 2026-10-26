@@ -10,6 +10,7 @@ import '../config/api_config.dart';
 import '../models/attendance_log.dart';
 import '../models/event.dart';
 import '../models/fine.dart';
+import '../models/missed_slot.dart';
 import '../models/qr_slot.dart';
 import '../models/student_profile.dart';
 import '../models/user.dart';
@@ -309,6 +310,15 @@ class ApiService {
     }
     return data
         .map((e) => AttendanceLog.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Every slot the student missed (all pages), newest day first; omit
+  /// [event] for every event.
+  Future<List<MissedSlot>> studentMissedSlots({int? event}) async {
+    final data = await _cachedAll('/student/missed-slots/', {'event': ?event});
+    return data
+        .map((e) => MissedSlot.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 

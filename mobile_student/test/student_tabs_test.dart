@@ -40,13 +40,38 @@ void bigScreen(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('History defaults to the event closest to today, groups by date',
+  Map<String, dynamic> missedJson(String date, String type, String display,
+          {bool paid = false}) =>
+      {
+        'event': 2,
+        'event_name': 'Running Event',
+        'date': date,
+        'attendance_type': type,
+        'attendance_type_display': display,
+        'window_start': '13:00:00',
+        'window_end': '14:00:00',
+        'rate': '50.00',
+        'paid': paid,
+      };
+
+  Future<void> pumpHistory(WidgetTester tester, MockClient client) async {
+    await tester.pumpWidget(
+      Provider<ApiService>.value(
+        value: ApiService(tokens: FakeTokens(), client: client),
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: const Scaffold(body: HistoryTab()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('History lists events; the closest one drops down its missed slots',
       (tester) async {
     bigScreen(tester);
     final today = manilaToday();
     String day(int o) => ymd(DateTime(today.year, today.month, today.day + o));
-    final attendanceQueries = <Map<String, String>>[];
-
     final client = MockClient((req) async {
       final path = req.url.path;
       if (path.endsWith('/student/events/')) {
@@ -60,59 +85,57 @@ void main() {
         });
       }
       if (path.endsWith('/student/attendance/')) {
-        attendanceQueries.add(req.url.queryParameters);
+        expect(req.url.queryParameters, isEmpty);
         return json({
           'results': [
             logJson(1, day(-1), 'AM_IN', 'AM Time-In', 'LATE',
                 '${day(-1)}T08:20:00+08:00'), // stale server value -> Present
-            logJson(2, day(0), 'AM_OUT', 'AM Time-Out', 'PRESENT',
-                '${day(0)}T11:45:00+08:00'),
             logJson(3, day(0), 'AM_IN', 'AM Time-In', 'PRESENT',
                 '${day(0)}T07:30:00+08:00'),
           ],
         });
       }
+      if (path.endsWith('/student/missed-slots/')) {
+        return json({
+          'results': [
+            missedJson(day(-1), 'PM_IN', 'PM Time-In'),
+            missedJson(day(-1), 'PM_OUT', 'PM Time-Out', paid: true),
+          ],
+        });
+      }
       return json({'detail': 'nf'}, 404);
     });
+    await pumpHistory(tester, client);
 
-    await tester.pumpWidget(
-      Provider<ApiService>.value(
-        value: ApiService(tokens: FakeTokens(), client: client),
-        child: MaterialApp(
-          theme: AppTheme.light,
-          home: const Scaffold(body: HistoryTab()),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    // Default selection = the event whose range contains today.
-    expect(find.text('Running Event'), findsOneWidget);
-    expect(attendanceQueries.single, {'event': '2'});
-
-    // Today's group comes first, slots in natural order, soft badges + time.
-    final amIn = tester.getTopLeft(find.text('AM Time-In').first).dy;
-    final amOut = tester.getTopLeft(find.text('AM Time-Out')).dy;
-    final yesterdayAmIn = tester.getTopLeft(find.text('AM Time-In').last).dy;
-    expect(amIn < amOut, isTrue);
-    expect(amOut < yesterdayAmIn, isTrue);
-    // A stale "LATE" from the server reads as Present: no Late anywhere.
-    expect(find.textContaining('Late'), findsNothing);
-    expect(find.text('Present'), findsNWidgets(3));
-    expect(find.text('7:30 AM'), findsOneWidget);
-
-    // Switch to "All events": request has no event filter.
-    await tester.tap(find.text('Running Event'));
-    await tester.pumpAndSettle();
+    // Every event is a card; past/ongoing ones show their missed count.
     expect(find.text('Future Event'), findsOneWidget);
     expect(find.text('Old Event'), findsOneWidget);
-    await tester.tap(find.text('All events').last);
+    expect(find.text('2 missed'), findsOneWidget);
+    expect(find.text('No misses'), findsOneWidget); // Old Event
+
+    // The running event starts expanded: missed slots with their window.
+    expect(find.text('Missed slots (2)'), findsOneWidget);
+    expect(find.text('PM Time-In'), findsOneWidget);
+    expect(find.textContaining('Scan window 1:00 PM – 2:00 PM'),
+        findsNWidgets(2));
+    expect(find.text('Unpaid'), findsOneWidget);
+    expect(find.text('Paid'), findsOneWidget);
+    expect(find.text('Attended (2)'), findsOneWidget);
+    expect(find.textContaining('7:30 AM'), findsOneWidget);
+    // A stale "LATE" from the server reads as Present: no Late anywhere.
+    expect(find.textContaining('Late'), findsNothing);
+
+    // Collapse it, expand the old event: nothing missed there.
+    await tester.tap(find.text('Running Event'));
     await tester.pumpAndSettle();
-    expect(attendanceQueries.last, isEmpty);
-    expect(find.text('All events'), findsOneWidget);
+    expect(find.text('PM Time-In'), findsNothing);
+    await tester.tap(find.text('Old Event'));
+    await tester.pumpAndSettle();
+    expect(find.text("You haven't missed any slot so far."), findsOneWidget);
   });
 
-  testWidgets('History empty state for an event without logs', (tester) async {
+  testWidgets('History still shows events when missed slots fail to load',
+      (tester) async {
     bigScreen(tester);
     final today = manilaToday();
     final client = MockClient((req) async {
@@ -123,19 +146,15 @@ void main() {
           ],
         });
       }
+      if (req.url.path.endsWith('/student/missed-slots/')) {
+        return json({'detail': 'Not found.'}, 404);
+      }
       return json({'results': []});
     });
-    await tester.pumpWidget(
-      Provider<ApiService>.value(
-        value: ApiService(tokens: FakeTokens(), client: client),
-        child: MaterialApp(
-          theme: AppTheme.light,
-          home: const Scaffold(body: HistoryTab()),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('No attendance recorded for this event yet'), findsOneWidget);
+    await pumpHistory(tester, client);
+    expect(find.text('Running Event'), findsOneWidget);
+    expect(find.textContaining("Missed slots couldn't be loaded"), findsOneWidget);
+    expect(find.text('No scans recorded yet.'), findsOneWidget);
   });
 
   group('Profile tab', () {

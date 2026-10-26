@@ -20,6 +20,12 @@ class AppTheme {
   static const Color greenTint = Color(0xFFE7F6E2);
   static const Color greenTintInk = Color(0xFF0F3D08);
 
+  /// Top app bar + bottom navigation background (light green).
+  static const Color barBackground = greenTint;
+
+  /// Selected-tab pill on the light-green nav bar (one step deeper than the bar).
+  static const Color barIndicator = Color(0xFFC6EAB8);
+
   static const Color ink = Color(0xFF17231A);
   static const Color muted = Color(0xFF5B6B5F);
   static const Color background = Color(0xFFF3F6F3);
@@ -93,6 +99,7 @@ class AppTheme {
     final bg = isLight ? background : _darkBackground;
     final onSurface = isLight ? ink : _darkInk;
     final variant = isLight ? muted : _darkMuted;
+    final bar = isLight ? barBackground : _darkSurface;
 
     final scheme = ColorScheme.fromSeed(
       seedColor: green,
@@ -146,7 +153,7 @@ class AppTheme {
     return base.copyWith(
       textTheme: base.textTheme.apply(bodyColor: onSurface, displayColor: onSurface),
       appBarTheme: AppBarTheme(
-        backgroundColor: surface,
+        backgroundColor: bar,
         foregroundColor: onSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -250,11 +257,11 @@ class AppTheme {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: surface,
+        backgroundColor: bar,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         height: 68,
-        indicatorColor: brand.tint,
+        indicatorColor: isLight ? barIndicator : brand.tint,
         indicatorShape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16)),
         iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(
