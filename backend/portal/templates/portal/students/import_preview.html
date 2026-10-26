@@ -15,6 +15,9 @@
   </div>
   <div class="page-actions no-print">
     <a class="btn btn-outline-secondary" href="{% url 'portal:students-import' %}"><i class="bi bi-arrow-left"></i> Start over</a>
+    {% if counts.error %}
+      <a class="btn btn-outline-danger" href="{% url 'portal:students-import-errors' %}"><i class="bi bi-download"></i> Rows with errors (CSV)</a>
+    {% endif %}
     {% if counts.new or counts.update %}
       <form method="post" class="d-inline">
         {% csrf_token %}
@@ -29,12 +32,20 @@
 <div class="card">
   <div class="card-body">
     {% if not counts.new and not counts.update %}<div class="alert alert-warning">Nothing to create or update. Fix the file and upload it again.</div>{% endif %}
+    {% if counts.error %}
+      <div class="alert alert-danger d-flex flex-wrap align-items-center gap-2">
+        <span><i class="bi bi-exclamation-triangle-fill me-1"></i>
+          <strong>{{ counts.error }} row{{ counts.error|pluralize }} with errors will be skipped</strong>{% if counts.new or counts.update %} &mdash; the other rows are still imported when you confirm{% endif %}.
+          They are listed first below with the reason.</span>
+        <a class="btn btn-sm btn-danger ms-md-auto" href="{% url 'portal:students-import-errors' %}"><i class="bi bi-download"></i> Download them (CSV)</a>
+      </div>
+    {% endif %}
     <div class="table-responsive">
       <table class="table table-sm align-middle datatable" id="importPreview">
         <thead><tr><th>Line</th><th>Student No.</th><th>Name</th><th>Year</th><th>Section</th><th>Result</th></tr></thead>
         <tbody>
         {% for r in rows %}
-          <tr>
+          <tr{% if r.status == 'error' %} class="table-danger"{% endif %}>
             <td>{{ r.line }}</td>
             <td>{{ r.student_number }}</td>
             <td>{{ r.last_name }}, {{ r.first_name }} {{ r.middle_name }}</td>

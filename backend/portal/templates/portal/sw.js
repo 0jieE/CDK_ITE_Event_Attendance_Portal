@@ -51,7 +51,7 @@ function pageKey(input) {
 }
 
 const NEVER_SAVE = [
-  /^\/portal\/(login|logout)\//, /^\/portal\/students\/credentials\//, /^\/portal\/students\/import\/template\//,
+  /^\/portal\/(login|logout)\//, /^\/portal\/students\/credentials\//, /^\/portal\/students\/import\/(template|errors)\//,
   /^\/portal\/sw\.js$/, /^\/portal\/manifest\.webmanifest$/, /^\/portal\/offline\//,
   /\/(add|edit|delete|calculate|mark-paid|pay-slot|unpay-slot|toggle-active|activate)\/$/,
 ];

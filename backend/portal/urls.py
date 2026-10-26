@@ -26,6 +26,7 @@ urlpatterns = [
     path("reports/financial/", views.report_financial_view, name="reports-financial"),
     # Student masterlist import + printable credentials (before the CRUD routes)
     path("students/import/", views.students_import_view, name="students-import"),
+    path("students/import/errors/", views.students_import_errors_view, name="students-import-errors"),
     path("students/import/template/<str:fmt>/", views.students_import_template_view,
          name="students-import-template"),
     path("students/credentials/", views.students_credentials_view, name="students-credentials"),

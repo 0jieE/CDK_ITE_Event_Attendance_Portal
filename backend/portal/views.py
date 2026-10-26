@@ -7,6 +7,7 @@ duplicated here.
 
 import csv
 import datetime
+import io
 from decimal import Decimal
 import logging
 
@@ -1011,8 +1012,24 @@ def students_import_view(request):
         return redirect("portal:students-import")
     request.session[_PENDING_KEY] = rows
     return render(request, "portal/students/import_preview.html", _import_context(
-        request, rows=rows, counts=masterlist.summarize(rows), filename=upload.name,
+        request, rows=masterlist.review_order(rows), counts=masterlist.summarize(rows), filename=upload.name,
     ))
+
+
+@admin_required
+def students_import_errors_view(request):
+    """The rows of the last previewed file that cannot be imported, as a CSV to correct and upload again."""
+    rows = masterlist.error_report_rows(request.session.get(_PENDING_KEY) or [])
+    if not rows:
+        messages.info(request, "There are no rows with errors to download.")
+        return redirect("portal:students-import")
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=list(rows[0].keys()))
+    writer.writeheader()
+    writer.writerows(rows)
+    response = HttpResponse("\ufeff" + out.getvalue(), content_type="text/csv; charset=utf-8")   # BOM: Excel opens it cleanly
+    response["Content-Disposition"] = 'attachment; filename="masterlist_rows_with_errors.csv"'
+    return response
 
 
 @admin_required

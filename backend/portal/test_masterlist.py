@@ -154,6 +154,64 @@ class MasterlistUpdateTests(TestCase):
         self.assertContains(r, "Created 1 student(s), updated 1")
 
 
+class MasterlistErrorReportTests(TestCase):
+    def setUp(self):
+        User.objects.create_user("adviser", password="pw-12345-x", is_admin=True)
+        self.client.login(username="adviser", password="pw-12345-x")
+        self.csv = (HEADER + "2025-1,Good,One,,1,A\n,NoNumber,Two,,1,A\n2025-3,Good,Three,,2,B\n"
+                    "2025-4,Bad,Year,,9,A\n" + "X" * 60 + ",Long,Number,,1,A\n").encode()
+
+    def preview(self):
+        return self.client.post(reverse("portal:students-import"),
+                                {"action": "preview", "file": _upload("m.csv", self.csv)})
+
+    def test_review_order_puts_errors_first_then_file_order(self):
+        rows = _rows("2025-1,Good,One,,1,A\n,NoNumber,Two,,1,A\n2025-3,Good,Three,,2,B\n2025-4,Bad,Year,,9,A\n")
+        self.assertEqual([r["line"] for r in masterlist.review_order(rows)], [3, 5, 2, 4])
+
+    def test_too_long_student_number_has_its_own_message(self):
+        self.assertEqual(_rows("X" * 60 + ",Long,Number,,1,A\n")[0]["message"],
+                         "Student No. is longer than 50 characters")
+
+    def test_preview_lists_errors_first_with_a_warning_and_a_download_button(self):
+        r = self.preview()
+        self.assertContains(r, "3 rows with errors will be skipped")
+        self.assertContains(r, "the other rows are still imported")
+        self.assertContains(r, reverse("portal:students-import-errors"))
+        html = r.content.decode()
+        self.assertLess(html.index("Student No. is required"), html.index("Three"))     # errors before good rows
+        self.assertEqual(html.count('class="table-danger"'), 3)
+
+    def test_download_gives_only_the_error_rows_with_line_and_problem(self):
+        self.preview()
+        r = self.client.get(reverse("portal:students-import-errors"))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("attachment", r["Content-Disposition"])
+        text = r.content.decode("utf-8-sig")
+        lines = text.strip().splitlines()
+        self.assertEqual(lines[0], "Student No.,Last Name,First Name,Middle Name,Year Level,Section,Line,Problem")
+        self.assertEqual(len(lines), 4)                                                 # header + 3 errors
+        self.assertIn("Year Level '9' is not 1-4", text)
+        self.assertNotIn("Three", text)                                                 # good rows are not in it
+
+    def test_the_downloaded_file_can_be_uploaded_again(self):
+        self.preview()
+        csv_bytes = self.client.get(reverse("portal:students-import-errors")).content
+        rows = masterlist.validate_rows(masterlist.parse_upload(_upload("fix.csv", csv_bytes)))
+        self.assertEqual(len(rows), 3)                                                  # extra Line / Problem columns ignored
+        self.assertTrue(all(r["status"] == "error" for r in rows))
+
+    def test_no_errors_means_no_download(self):
+        self.client.post(reverse("portal:students-import"),
+                         {"action": "preview", "file": _upload("m.csv", (HEADER + "2025-9,Fine,Row,,1,A\n").encode())})
+        r = self.client.get(reverse("portal:students-import-errors"), follow=True)
+        self.assertContains(r, "no rows with errors")
+
+    def test_download_needs_an_adviser(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("portal:students-import-errors")).status_code, 302)
+
+
 class MasterlistPortalTests(TestCase):
     def setUp(self):
         User.objects.create_user("adviser", password="pw-12345-x", is_admin=True)

@@ -237,7 +237,9 @@ def validate_rows(rows):
         problems = []
         if not number:
             problems.append("Student No. is required")
-        elif len(number) > 50 or not re.fullmatch(r"[\w.@+\-]+", number):
+        elif len(number) > 50:
+            problems.append("Student No. is longer than 50 characters")
+        elif not re.fullmatch(r"[\w.@+\-]+", number):
             problems.append("Student No. may only contain letters, digits and . @ + - _")
         if not row.get("last_name"):
             problems.append("Last Name is required")
@@ -273,6 +275,26 @@ def validate_rows(rows):
         if number:
             seen.add(key)
     return rows
+
+
+def review_order(rows):
+    """Rows for the preview: the ones that need attention (errors) first, then file order."""
+    return sorted(rows, key=lambda r: (r["status"] != "error", r.get("line", 0)))
+
+
+def error_report_rows(rows):
+    """The error rows as ``COLUMNS`` + ``Line`` + ``Problem`` dicts, ready to fix and upload again."""
+    out = []
+    for r in rows:
+        if r.get("status") != "error":
+            continue
+        out.append({
+            "Student No.": r.get("student_number", ""), "Last Name": r.get("last_name", ""),
+            "First Name": r.get("first_name", ""), "Middle Name": r.get("middle_name", ""),
+            "Year Level": r.get("year_level", ""), "Section": r.get("section", ""),
+            "Line": r.get("line", ""), "Problem": r.get("message", ""),
+        })
+    return out
 
 
 def summarize(rows):
