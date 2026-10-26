@@ -1018,11 +1018,18 @@ def students_import_view(request):
 
 @admin_required
 def students_import_errors_view(request):
-    """The rows of the last previewed file that cannot be imported, as a CSV to correct and upload again."""
+    """The rows of the last previewed file that cannot be imported (``?format=xlsx`` or CSV), to correct and upload again."""
     rows = masterlist.error_report_rows(request.session.get(_PENDING_KEY) or [])
     if not rows:
         messages.info(request, "There are no rows with errors to download.")
         return redirect("portal:students-import")
+    if request.GET.get("format") == "xlsx":
+        response = HttpResponse(
+            masterlist.error_report_xlsx_bytes(rows),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = 'attachment; filename="masterlist_rows_with_errors.xlsx"'
+        return response
     out = io.StringIO()
     writer = csv.DictWriter(out, fieldnames=list(rows[0].keys()))
     writer.writeheader()

@@ -173,7 +173,7 @@ student a username and password:
 * **Portal -> Students -> Import masterlist** takes a **CSV or Excel (.xlsx)** file
   (`Student No., Last Name, First Name, Middle Name, Year Level, Section`; downloadable template in
   both formats). You get a preview (new / to update / no changes / errors) before anything is saved. Rows with errors are listed first with the
-  reason and can be downloaded as a CSV (same columns + Line + Problem) to fix and upload again; they are skipped,
+  reason and can be downloaded as Excel or CSV (same columns + Line + Problem) to fix and upload again; they are skipped,
   the other rows are still imported.
 * The **username is the student number**; a random 8-character password is generated for each
   student. The student number is the key: a number already registered is **updated** (name, year level,

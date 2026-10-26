@@ -201,6 +201,31 @@ class MasterlistErrorReportTests(TestCase):
         self.assertEqual(len(rows), 3)                                                  # extra Line / Problem columns ignored
         self.assertTrue(all(r["status"] == "error" for r in rows))
 
+    def test_excel_download_has_the_same_rows_and_keeps_ids_as_text(self):
+        csv_bytes = (HEADER + "0012345,Lead,Zero,,9,A\n2025-2,Fine,Row,,1,A\n").encode()
+        self.client.post(reverse("portal:students-import"), {"action": "preview", "file": _upload("m.csv", csv_bytes)})
+        r = self.client.get(reverse("portal:students-import-errors") + "?format=xlsx")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("spreadsheetml", r["Content-Type"])
+        self.assertIn(".xlsx", r["Content-Disposition"])
+        ws = load_workbook(io.BytesIO(r.content))["Masterlist"]
+        self.assertEqual([c.value for c in ws[1]], masterlist.ERROR_REPORT_COLUMNS)
+        self.assertEqual(ws.max_row, 2)                                               # header + the one error row
+        self.assertEqual(ws["A2"].value, "0012345")                                   # leading zeros survive
+        self.assertIn("is not 1-4", ws["H2"].value)
+
+    def test_the_excel_error_file_can_be_uploaded_again(self):
+        self.preview()
+        data = self.client.get(reverse("portal:students-import-errors") + "?format=xlsx").content
+        rows = masterlist.validate_rows(masterlist.parse_upload(_upload("fix.xlsx", data)))
+        self.assertEqual(len(rows), 3)
+        self.assertTrue(all(r["status"] == "error" for r in rows))
+
+    def test_preview_offers_excel_and_csv(self):
+        r = self.preview()
+        self.assertContains(r, reverse("portal:students-import-errors") + "?format=xlsx")
+        self.assertContains(r, "Download them (Excel)")
+
     def test_no_errors_means_no_download(self):
         self.client.post(reverse("portal:students-import"),
                          {"action": "preview", "file": _upload("m.csv", (HEADER + "2025-9,Fine,Row,,1,A\n").encode())})

@@ -16,7 +16,10 @@
   <div class="page-actions no-print">
     <a class="btn btn-outline-secondary" href="{% url 'portal:students-import' %}"><i class="bi bi-arrow-left"></i> Start over</a>
     {% if counts.error %}
-      <a class="btn btn-outline-danger" href="{% url 'portal:students-import-errors' %}"><i class="bi bi-download"></i> Rows with errors (CSV)</a>
+      <div class="btn-group">
+        <a class="btn btn-outline-danger" href="{% url 'portal:students-import-errors' %}?format=xlsx"><i class="bi bi-file-earmark-excel"></i> Errors (Excel)</a>
+        <a class="btn btn-outline-danger" href="{% url 'portal:students-import-errors' %}">CSV</a>
+      </div>
     {% endif %}
     {% if counts.new or counts.update %}
       <form method="post" class="d-inline">
@@ -37,7 +40,10 @@
         <span><i class="bi bi-exclamation-triangle-fill me-1"></i>
           <strong>{{ counts.error }} row{{ counts.error|pluralize }} with errors will be skipped</strong>{% if counts.new or counts.update %} &mdash; the other rows are still imported when you confirm{% endif %}.
           They are listed first below with the reason.</span>
-        <a class="btn btn-sm btn-danger ms-md-auto" href="{% url 'portal:students-import-errors' %}"><i class="bi bi-download"></i> Download them (CSV)</a>
+        <span class="ms-md-auto btn-group">
+          <a class="btn btn-sm btn-danger" href="{% url 'portal:students-import-errors' %}?format=xlsx"><i class="bi bi-file-earmark-excel"></i> Download them (Excel)</a>
+          <a class="btn btn-sm btn-danger" href="{% url 'portal:students-import-errors' %}">CSV</a>
+        </span>
       </div>
     {% endif %}
     <div class="table-responsive">

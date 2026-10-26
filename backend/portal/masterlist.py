@@ -297,6 +297,33 @@ def error_report_rows(rows):
     return out
 
 
+ERROR_REPORT_COLUMNS = COLUMNS + ["Line", "Problem"]
+
+
+def error_report_xlsx_bytes(rows):
+    """The error report as an Excel file; Student No. is stored as text so IDs keep their zeros."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Masterlist"
+    ws.append(ERROR_REPORT_COLUMNS)
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="41B422")
+    for row in rows:
+        ws.append([row[c] for c in ERROR_REPORT_COLUMNS])
+    for cells in ws.iter_rows(min_row=2, max_col=1):
+        cells[0].number_format = "@"
+    for col, width in zip("ABCDEFGH", (16, 22, 22, 18, 14, 10, 8, 60)):
+        ws.column_dimensions[col].width = width
+    ws.freeze_panes = "A2"
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def summarize(rows):
     return {s: sum(1 for r in rows if r["status"] == s) for s in ("new", "update", "exists", "error")}
 
