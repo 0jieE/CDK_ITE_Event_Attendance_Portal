@@ -9,7 +9,7 @@ import hashlib
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -570,8 +570,10 @@ class StudentMissedSlotsView(StudentScopedMixin, generics.ListAPIView):
     """The required slots the student missed, newest date first (then slot order).
 
     Absences are computed, not stored: same rule as the fines (``services.missed_slot_details``), so
-    a slot that is still open today, or lies in the future, is not listed, and only active events
-    count. ``paid`` is true when the treasurer has recorded the cash for that slot.
+    a slot that is still open today, or lies in the future, is not listed. Events count while they are
+    active, and also after being switched off when the student already has a fine for them (the fine
+    stays on their balance and can still be paid slot by slot, so its slots must stay listable).
+    ``paid`` is true when the treasurer has recorded the cash for that slot.
     """
 
     serializer_class = StudentMissedSlotSerializer
@@ -582,7 +584,9 @@ class StudentMissedSlotsView(StudentScopedMixin, generics.ListAPIView):
 
     def get_queryset(self):
         student = self.get_student()
-        events = Event.objects.filter(is_active=True, start_date__lte=timezone.localdate())
+        events = Event.objects.filter(start_date__lte=timezone.localdate()).filter(
+            Q(is_active=True) | Q(fines__student=student)
+        ).distinct()
         event_id = self.request.query_params.get("event")
         if event_id:
             if not event_id.isdigit():

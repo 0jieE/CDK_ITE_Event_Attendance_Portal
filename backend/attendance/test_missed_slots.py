@@ -68,10 +68,20 @@ class MissedSlotsApiTests(TestCase):
         self.assertNotIn(future.id, ids)
         self.assertNotIn(open_today.id, ids)
 
-    def test_inactive_events_are_left_out_like_the_fines(self):
+    def test_inactive_event_without_a_fine_is_left_out(self):
         self.event.is_active = False
         self.event.save()
         self.assertEqual(self.rows(), [])
+
+    def test_inactive_event_stays_listed_when_the_student_has_a_fine_for_it(self):
+        # The fine (and its payments) outlive the Active switch, so its slots must still be listable.
+        Fine.objects.create(student=self.alice, event=self.event, missed_slots=4, amount=Decimal("120.00"))
+        self.event.is_active = False
+        self.event.save()
+        self.assertEqual(len(self.rows()), 4)
+        bob_api = APIClient()
+        bob_api.force_authenticate(self.bob.user)
+        self.assertEqual(bob_api.get(reverse("student-missed-slots")).json()["results"], [])   # Bob has no fine
 
     def test_event_filter(self):
         other = make_event(name="Other", start_date=self.d1, end_date=self.d1)
