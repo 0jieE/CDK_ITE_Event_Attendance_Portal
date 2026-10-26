@@ -995,10 +995,10 @@ def students_import_view(request):
         counts = masterlist.summarize(rows)
         messages.success(
             request,
-            f"Imported {len(credentials)} student(s); {counts['exists']} already existed and "
-            f"{counts['error']} row(s) had errors and were skipped.",
+            f"Created {len(credentials)} student(s), updated {counts['update']}; "
+            f"{counts['exists']} had no changes and {counts['error']} row(s) had errors and were skipped.",
         )
-        return redirect("portal:students-credentials")
+        return redirect("portal:students-credentials" if credentials else "portal:students-list")
 
     upload = request.FILES.get("file")
     if not upload:

@@ -172,9 +172,11 @@ student a username and password:
 
 * **Portal -> Students -> Import masterlist** takes a **CSV or Excel (.xlsx)** file
   (`Student No., Last Name, First Name, Middle Name, Year Level, Section`; downloadable template in
-  both formats). You get a preview (new / already registered / errors) before anything is saved.
+  both formats). You get a preview (new / to update / no changes / errors) before anything is saved.
 * The **username is the student number**; a random 8-character password is generated for each
-  student. Students already registered are skipped, never changed.
+  student. The student number is the key: a number already registered is **updated** (name, year level,
+  section - shown in the preview) and keeps its password; blank cells never erase stored values, and a number
+  repeated in the file is only recorded once (the first row).
 * The **printable credential slips** page (Print, or Download CSV) shows the passwords **once** -
   they are stored hashed. **Reset & print** on the import page issues new passwords for a Year /
   Section when slips must be reprinted.

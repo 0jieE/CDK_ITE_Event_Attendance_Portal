@@ -71,6 +71,89 @@ class MasterlistParsingTests(TestCase):
         self.assertEqual(masterlist.import_rows(again), [])
 
 
+HEADER = "Student No.,Last Name,First Name,Middle Name,Year Level,Section\n"
+
+
+def _rows(text):
+    return masterlist.validate_rows(masterlist.parse_upload(_upload("m.csv", (HEADER + text).encode())))
+
+
+class MasterlistUpdateTests(TestCase):
+    """The Student No. is the key: a registered number is updated, never duplicated."""
+
+    def setUp(self):
+        creds = masterlist.import_rows(_rows("2024-0001,Dela Cruz,Juan,Santos,1,A\n2024-0002,Reyes,Maria,,2,B\n"))
+        self.password = {c["student_number"]: c["password"] for c in creds}
+
+    def student(self, number):
+        return Student.objects.select_related("user").get(student_number=number)
+
+    def test_a_changed_section_and_year_is_an_update_that_keeps_the_password(self):
+        rows = _rows("2024-0001,Dela Cruz,Juan,Santos,2,C\n2024-0002,Reyes,Maria,,2,B\n")
+        self.assertEqual([r["status"] for r in rows], ["update", "exists"])
+        self.assertEqual(sorted(rows[0]["changes"]), ["Section: A -> C", "Year: 1 -> 2"])
+        self.assertEqual(masterlist.import_rows(rows), [])                     # nothing created, no new slips
+        s = self.student("2024-0001")
+        self.assertEqual((s.year_level, s.section), ("2", "C"))
+        self.assertTrue(s.user.check_password(self.password["2024-0001"]))     # same password still works
+        self.assertEqual(Student.objects.count(), 2)                           # never a second record
+
+    def test_names_can_be_corrected(self):
+        rows = _rows("2024-0002,Reyes-Santos,Maria Clara,Lopez,2,B\n")
+        self.assertEqual(rows[0]["status"], "update")
+        masterlist.import_rows(rows)
+        u = self.student("2024-0002").user
+        self.assertEqual((u.last_name, u.first_name, u.middle_name), ("Reyes-Santos", "Maria Clara", "Lopez"))
+
+    def test_blank_cells_never_erase_stored_values(self):
+        rows = _rows("2024-0001,Dela Cruz,Juan,,,\n")
+        self.assertEqual(rows[0]["status"], "exists")                          # nothing differs
+        masterlist.import_rows(rows)
+        s = self.student("2024-0001")
+        self.assertEqual((s.user.middle_name, s.year_level, s.section), ("Santos", "1", "A"))
+
+    def test_the_number_matches_regardless_of_case(self):
+        masterlist.import_rows(_rows("ABC-1,Lim,Bob,,1,A\n"))
+        rows = _rows("abc-1,Lim,Bob,,3,D\n")
+        self.assertEqual(rows[0]["status"], "update")
+        masterlist.import_rows(rows)
+        self.assertEqual(Student.objects.filter(student_number__iexact="abc-1").count(), 1)
+        self.assertEqual(self.student("ABC-1").section, "D")
+
+    def test_a_row_with_an_invalid_value_updates_nothing(self):
+        rows = _rows("2024-0001,Dela Cruz,Juan,Santos,9,Z\n")
+        self.assertEqual(rows[0]["status"], "error")
+        masterlist.import_rows(rows)
+        self.assertEqual((self.student("2024-0001").year_level, self.student("2024-0001").section), ("1", "A"))
+
+    def test_a_number_twice_in_one_file_is_recorded_once(self):
+        rows = _rows("2024-0050,Tan,Eve,,1,A\n2024-0050,Tan,Eve,,2,B\n")
+        self.assertEqual([r["status"] for r in rows], ["new", "error"])
+        self.assertIn("Duplicate", rows[1]["message"])
+        self.assertEqual(len(masterlist.import_rows(rows)), 1)
+        s = self.student("2024-0050")
+        self.assertEqual((s.year_level, s.section), ("1", "A"))                # the first row won
+
+    def test_updating_the_same_number_twice_in_a_file_does_not_apply_the_second(self):
+        rows = _rows("2024-0001,Dela Cruz,Juan,Santos,3,B\n2024-0001,Dela Cruz,Juan,Santos,4,C\n")
+        self.assertEqual([r["status"] for r in rows], ["update", "error"])
+        masterlist.import_rows(rows)
+        self.assertEqual((self.student("2024-0001").year_level, self.student("2024-0001").section), ("3", "B"))
+
+    def test_portal_preview_shows_the_changes_and_confirm_applies_them(self):
+        User.objects.create_user("adviser", password="pw-12345-x", is_admin=True)
+        self.client.login(username="adviser", password="pw-12345-x")
+        csv = (HEADER + "2024-0001,Dela Cruz,Juan,Santos,2,C\n2024-0009,New,Student,,1,A\n").encode()
+        r = self.client.post(reverse("portal:students-import"), {"action": "preview", "file": _upload("m.csv", csv)})
+        self.assertContains(r, "1 to update")
+        self.assertContains(r, "Section: A -&gt; C")
+        self.assertEqual(self.student("2024-0001").section, "A")               # preview changes nothing
+        r = self.client.post(reverse("portal:students-import"), {"action": "confirm"}, follow=True)
+        self.assertEqual(self.student("2024-0001").section, "C")
+        self.assertTrue(Student.objects.filter(student_number="2024-0009").exists())
+        self.assertContains(r, "Created 1 student(s), updated 1")
+
+
 class MasterlistPortalTests(TestCase):
     def setUp(self):
         User.objects.create_user("adviser", password="pw-12345-x", is_admin=True)

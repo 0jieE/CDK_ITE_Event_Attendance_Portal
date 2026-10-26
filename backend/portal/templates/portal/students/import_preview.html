@@ -8,17 +8,19 @@
     <h2 class="page-title">Review &ldquo;{{ filename }}&rdquo;</h2>
     <div class="page-sub">
       <span class="badge text-bg-success">{{ counts.new }} new</span>
-      <span class="badge text-bg-secondary">{{ counts.exists }} already registered</span>
+      <span class="badge text-bg-primary">{{ counts.update }} to update</span>
+      <span class="badge text-bg-secondary">{{ counts.exists }} no changes</span>
       <span class="badge text-bg-danger">{{ counts.error }} with errors</span>
     </div>
   </div>
   <div class="page-actions no-print">
     <a class="btn btn-outline-secondary" href="{% url 'portal:students-import' %}"><i class="bi bi-arrow-left"></i> Start over</a>
-    {% if counts.new %}
+    {% if counts.new or counts.update %}
       <form method="post" class="d-inline">
         {% csrf_token %}
         <input type="hidden" name="action" value="confirm">
-        <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i> Create {{ counts.new }} account{{ counts.new|pluralize }}</button>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i>
+          {% if counts.new %}Create {{ counts.new }} account{{ counts.new|pluralize }}{% endif %}{% if counts.new and counts.update %} &amp; {% endif %}{% if counts.update %}update {{ counts.update }} student{{ counts.update|pluralize }}{% endif %}</button>
       </form>
     {% endif %}
   </div>
@@ -26,7 +28,7 @@
 
 <div class="card">
   <div class="card-body">
-    {% if not counts.new %}<div class="alert alert-warning">Nothing new to import. Fix the file and upload it again.</div>{% endif %}
+    {% if not counts.new and not counts.update %}<div class="alert alert-warning">Nothing to create or update. Fix the file and upload it again.</div>{% endif %}
     <div class="table-responsive">
       <table class="table table-sm align-middle datatable" id="importPreview">
         <thead><tr><th>Line</th><th>Student No.</th><th>Name</th><th>Year</th><th>Section</th><th>Result</th></tr></thead>
@@ -40,7 +42,8 @@
             <td>{{ r.section|default:"—" }}</td>
             <td>
               {% if r.status == 'new' %}<span class="badge text-bg-success">New</span>
-              {% elif r.status == 'exists' %}<span class="badge text-bg-secondary">Skipped</span> <span class="small text-muted">{{ r.message }}</span>
+              {% elif r.status == 'update' %}<span class="badge text-bg-primary">Update</span> <span class="small">{{ r.message }}</span>
+              {% elif r.status == 'exists' %}<span class="badge text-bg-secondary">No changes</span> <span class="small text-muted">{{ r.message }}</span>
               {% else %}<span class="badge text-bg-danger">Error</span> <span class="small text-danger">{{ r.message }}</span>{% endif %}
             </td>
           </tr>

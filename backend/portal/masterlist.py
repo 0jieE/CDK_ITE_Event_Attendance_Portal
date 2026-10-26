@@ -197,13 +197,40 @@ def normalize_year(value):
     return _YEARS.get(v)
 
 
-def validate_rows(rows):
-    """Annotate each row with ``status`` (new / exists / error) and ``message``.
+#: (key in the row, label, how to read the current value from a Student)
+_UPDATABLE = (
+    ("last_name", "Last name", lambda s: s.user.last_name),
+    ("first_name", "First name", lambda s: s.user.first_name),
+    ("middle_name", "Middle name", lambda s: s.user.middle_name),
+    ("year_level", "Year", lambda s: s.year_level),
+    ("section", "Section", lambda s: s.section),
+)
 
-    Rows are normalised in place. Existing student numbers are *skipped*, never changed.
+
+def _changes(student, row):
+    """``[(key, label, old, new)]`` the row would change on an existing student.
+
+    A column left blank in the file never erases what is stored (only the two names are
+    required, and they are never blank here).
+    """
+    out = []
+    for key, label, current in _UPDATABLE:
+        new = (row.get(key) or "").strip()
+        old = current(student) or ""
+        if new and new != old:
+            out.append((key, label, old, new))
+    return out
+
+
+def validate_rows(rows):
+    """Annotate each row with ``status`` (new / update / exists / error) and ``message``.
+
+    Rows are normalised in place. The **Student No.** is the key: an unknown number is ``new``;
+    a registered one is ``update`` when the file carries a different name / year / section
+    (``changes`` lists them) and ``exists`` when nothing differs. Passwords are never touched.
     """
     seen = set()
-    existing_numbers = {n.lower() for n in Student.objects.values_list("student_number", flat=True)}
+    existing = {s.student_number.lower(): s for s in Student.objects.select_related("user")}
     existing_usernames = {u.lower() for u in User.objects.values_list("username", flat=True)}
     for row in rows:
         number = row.get("student_number", "")
@@ -232,8 +259,13 @@ def validate_rows(rows):
             row["status"], row["message"] = "error", "; ".join(problems)
         elif key in seen:
             row["status"], row["message"] = "error", "Duplicate Student No. in this file"
-        elif key in existing_numbers:
-            row["status"], row["message"] = "exists", "Already registered - skipped"
+        elif key in existing:
+            changes = _changes(existing[key], row)
+            row["changes"] = [f"{label}: {old or '-'} -> {new}" for _, label, old, new in changes]
+            if changes:
+                row["status"], row["message"] = "update", "; ".join(row["changes"])
+            else:
+                row["status"], row["message"] = "exists", "Already registered - no changes"
         elif key in existing_usernames:
             row["status"], row["message"] = "error", "That username is already used by another account"
         else:
@@ -244,7 +276,7 @@ def validate_rows(rows):
 
 
 def summarize(rows):
-    return {s: sum(1 for r in rows if r["status"] == s) for s in ("new", "exists", "error")}
+    return {s: sum(1 for r in rows if r["status"] == s) for s in ("new", "update", "exists", "error")}
 
 
 # ---------------------------------------------------------------------------
@@ -271,10 +303,19 @@ def _credential(student, password):
 
 
 def import_rows(rows):
-    """Create an account for every ``new`` row. Returns the credentials list."""
+    """Create an account for every ``new`` row and update every ``update`` row.
+
+    Returns the credentials of the created accounts (updated students keep their password).
+    """
     credentials = []
     with transaction.atomic():
         for row in rows:
+            if row.get("status") == "update":
+                student = Student.objects.select_related("user").filter(
+                    student_number__iexact=row["student_number"]).first()
+                if student is not None:
+                    _apply_changes(student, row)
+                continue
             if row.get("status") != "new":
                 continue
             password = generate_password()
@@ -296,6 +337,21 @@ def import_rows(rows):
             )
             credentials.append(_credential(student, password))
     return credentials
+
+
+def _apply_changes(student, row):
+    user_fields, student_fields = [], []
+    for key, _label, _old, new in _changes(student, row):
+        if key in ("last_name", "first_name", "middle_name"):
+            setattr(student.user, key, new)
+            user_fields.append(key)
+        else:
+            setattr(student, key, new)
+            student_fields.append(key)
+    if user_fields:
+        student.user.save(update_fields=user_fields)
+    if student_fields:
+        student.save(update_fields=student_fields)
 
 
 def reset_passwords(students):
