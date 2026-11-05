@@ -221,9 +221,10 @@ class ScanWindowVisibilityTests(TestCase):
         html = self.client.get(reverse("portal:events-add")).content.decode()
         for prefix, slot in self.SLOTS.items():
             for suffix in ("start", "end"):
-                chunk = html[html.index(f'id="id_{prefix}_{suffix}"') - 600: html.index(f'id="id_{prefix}_{suffix}"')]
-                self.assertIn("slot-window", chunk, prefix)
-                self.assertIn(f'data-slot="{slot}"', chunk, f"{prefix}_{suffix}")
+                idx = html.index(f'id="id_{prefix}_{suffix}"')
+                wrapper = html.rfind("slot-window", 0, idx)                       # the field's own wrapper div
+                self.assertNotEqual(wrapper, -1, prefix)
+                self.assertIn(f'data-slot="{slot}"', html[wrapper:wrapper + 60], f"{prefix}_{suffix}")
         self.assertIn("scan-windows-head", html)
         self.assertIn("scan-windows-hint", html)
         self.assertIn("Choose the required types above", html)

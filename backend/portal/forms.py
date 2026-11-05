@@ -11,6 +11,8 @@ from decimal import Decimal, InvalidOperation
 from django import forms
 from django.db import transaction
 from django.utils import timezone
+from django.utils.html import escape
+from django.utils.safestring import mark_safe
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 
@@ -40,6 +42,63 @@ class BootstrapModelForm(forms.ModelForm):
             else:
                 existing = widget.attrs.get("class", "")
                 widget.attrs["class"] = (existing + " form-control").strip()
+
+
+class SlotTimeWidget(forms.Widget):
+    """Hour + minute pickers with a *fixed* AM or PM half, for a scan-window time.
+
+    An AM slot (AM-In / AM-Out) only offers morning hours and a PM slot only afternoon hours, so
+    the wrong half cannot be picked. The only exception is noon (12:00), which closes AM-Out. The
+    form still posts a plain ``HH:MM`` through the hidden input, kept in sync by ``slotTimeSync``
+    in ``base.html``.
+    """
+
+    def __init__(self, period, attrs=None):
+        super().__init__(attrs)
+        self.period = period
+
+    @staticmethod
+    def _parse(value):
+        if isinstance(value, datetime.time):
+            return value.hour, value.minute
+        try:
+            hh, mm = str(value or "").split(":")[:2]
+            return int(hh), int(mm)
+        except (ValueError, TypeError):
+            return None
+
+    def _hours(self):
+        """``[(value, label)]``: PM = 12, 1..11 (as 12-23); AM = 1..11 plus 12 = noon."""
+        if self.period == "PM":
+            return [(12, "12")] + [(h + 12, f"{h:02d}") for h in range(1, 12)]
+        return [(h, f"{h:02d}") for h in range(1, 12)] + [(12, "12 noon")]
+
+    def render(self, name, value, attrs=None, renderer=None):
+        attrs = {**self.attrs, **(attrs or {})}
+        field_id = attrs.pop("id", f"id_{name}")
+        label = escape(attrs.pop("data-label", name))
+        parsed = self._parse(value)
+        hour, minute = parsed if parsed else (None, None)
+        hours = "".join(
+            f'<option value="{v}"{" selected" if v == hour else ""}>{text}</option>' for v, text in self._hours()
+        )
+        minutes = "".join(
+            f'<option value="{m}"{" selected" if m == minute else ""}>{m:02d}</option>' for m in range(60)
+        )
+        extra = "".join(f' {escape(k)}="{escape(v)}"' for k, v in attrs.items())
+        shown = f"{hour:02d}:{minute:02d}" if parsed else ""
+        return mark_safe(
+            f'<div class="slot-time" data-period="{self.period}">'
+            f'<select class="form-select slot-time-h" aria-label="{label} hour">{hours}</select>'
+            f'<span class="slot-time-sep">:</span>'
+            f'<select class="form-select slot-time-m" aria-label="{label} minute">{minutes}</select>'
+            f'<span class="slot-time-period">{self.period}</span>'
+            f'<input type="hidden" name="{escape(name)}" id="{escape(field_id)}" value="{shown}"{extra}>'
+            f"</div>"
+        )
+
+    def value_from_datadict(self, data, files, name):
+        return data.get(name)
 
 
 class EventForm(BootstrapModelForm):
@@ -89,14 +148,14 @@ class EventForm(BootstrapModelForm):
             "end_date": forms.DateInput(
                 attrs={"type": "date"}, format="%Y-%m-%d"
             ),
-            "am_in_start": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
-            "am_in_end": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
-            "am_out_start": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
-            "am_out_end": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
-            "pm_in_start": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
-            "pm_in_end": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
-            "pm_out_start": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
-            "pm_out_end": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
+            "am_in_start": SlotTimeWidget("AM"),
+            "am_in_end": SlotTimeWidget("AM"),
+            "am_out_start": SlotTimeWidget("AM"),
+            "am_out_end": SlotTimeWidget("AM"),
+            "pm_in_start": SlotTimeWidget("PM"),
+            "pm_in_end": SlotTimeWidget("PM"),
+            "pm_out_start": SlotTimeWidget("PM"),
+            "pm_out_end": SlotTimeWidget("PM"),
         }
         labels = {
             "am_in_start": "AM-In start", "am_in_end": "AM-In end",
@@ -160,11 +219,7 @@ class EventForm(BootstrapModelForm):
             attrs = self.fields[name].widget.attrs
             attrs["data-period"] = period
             attrs["data-default"] = self.DEFAULT_WINDOWS[name].strftime("%H:%M")
-            # AM windows run up to noon, PM windows from noon (native validation hint)
-            if period == "AM":
-                attrs["max"] = "12:00"
-            else:
-                attrs["min"] = "12:00"
+            attrs["data-label"] = self.Meta.labels[name]
             if creating and not self.is_bound:
                 self.fields[name].initial = self.DEFAULT_WINDOWS[name]
 

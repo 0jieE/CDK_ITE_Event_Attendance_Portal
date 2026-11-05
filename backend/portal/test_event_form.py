@@ -1,6 +1,7 @@
 """Event form: the start date suggests today (never earlier) and scan windows are AM / PM aware."""
 
 import datetime
+import re
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -8,6 +9,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from attendance.models import Event, SchoolYear, Semester
+
+from .forms import SlotTimeWidget
 
 DAY = datetime.timedelta(days=1)
 
@@ -80,9 +83,29 @@ class ScanWindowDefaultsTests(EventFormTestBase):
     def test_am_fields_are_marked_am_and_pm_fields_pm(self):
         html = self.client.get(reverse("portal:events-add")).content.decode()
         for field, period in (("am_in_start", "AM"), ("am_out_end", "AM"), ("pm_in_start", "PM"), ("pm_out_end", "PM")):
-            tag = html[html.index(f'id="id_{field}"') - 250: html.index(f'id="id_{field}"') + 250]
-            self.assertIn(f'data-period="{period}"', tag, field)
-            self.assertIn('max="12:00"' if period == "AM" else 'min="12:00"', tag, field)
+            idx = html.index(f'id="id_{field}"')
+            box = html.rfind('<div class="slot-time"', 0, idx)
+            self.assertIn(f'data-period="{period}"', html[box:box + 60], field)
+            self.assertIn(f'<span class="slot-time-period">{period}</span>', html[box:idx], field)
+
+    def test_an_am_picker_offers_no_afternoon_hour_and_a_pm_picker_no_morning_hour(self):
+        am = SlotTimeWidget("AM").render("x", datetime.time(7, 30), {"id": "id_x"})
+        pm = SlotTimeWidget("PM").render("x", datetime.time(16, 0), {"id": "id_x"})
+        am_hours = [int(v) for v in re.findall(r'<option value="(\d+)"', am.split("slot-time-m")[0])]
+        pm_hours = [int(v) for v in re.findall(r'<option value="(\d+)"', pm.split("slot-time-m")[0])]
+        self.assertEqual(am_hours, list(range(1, 13)))                                   # 1-11 AM and 12 = noon
+        self.assertEqual(sorted(pm_hours), [12] + list(range(13, 24)))                   # noon..11 PM, never a morning hour
+        self.assertIn('<option value="7" selected>07</option>', am)
+        self.assertIn('<option value="30" selected>30</option>', am)
+        self.assertIn('<option value="16" selected>04</option>', pm)                     # 16:00 shows as 04 (PM)
+        self.assertIn('name="x" id="id_x" value="07:30"', am)
+
+    def test_the_widget_posts_a_plain_hh_mm_and_handles_empty_values(self):
+        widget = SlotTimeWidget("AM")
+        self.assertEqual(widget.value_from_datadict({"x": "07:30"}, {}, "x"), "07:30")
+        self.assertIn('value=""', widget.render("x", None, {"id": "id_x"}))
+        self.assertIn('value="07:20"', widget.render("x", "07:20", {"id": "id_x"}))
+        self.assertIn('value="07:20"', widget.render("x", "07:20:00", {"id": "id_x"}))
 
     def test_editing_keeps_the_saved_windows_not_the_defaults(self):
         ev = Event.objects.create(
@@ -102,5 +125,5 @@ class ScanWindowDefaultsTests(EventFormTestBase):
 
     def test_the_page_script_enforces_the_halves_of_the_day(self):
         html = self.client.get(reverse("portal:events-list")).content.decode()
-        for marker in ("function syncEventForm", "function fixPeriod", "input[data-period]", "data-suggest-today"):
+        for marker in ("function syncEventForm", "function slotTimeSync", "function slotTimeLoad", "data-suggest-today"):
             self.assertIn(marker, html)

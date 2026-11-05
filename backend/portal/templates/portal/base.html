@@ -36,6 +36,11 @@
     .ts-wrapper .ts-control, .ts-wrapper.single.input-active .ts-control { border: 0 !important; background: transparent !important; box-shadow: none !important; padding: .38rem 2.1rem .38rem .65rem; min-height: 0; font-size: .88rem; }
     .ts-wrapper .ts-control input { font-size: .88rem; }
     .ts-dropdown { z-index: 1080; border-radius: .7rem; font-size: .875rem; }
+    /* scan-window time: hour + minute pickers with a fixed AM / PM half (SlotTimeWidget) */
+    .slot-time { display: flex; align-items: center; gap: .4rem; }
+    .slot-time select { flex: 1 1 0; min-width: 0; }
+    .slot-time-sep { font-weight: 700; }
+    .slot-time-period { min-width: 2.7rem; text-align: center; font-weight: 700; font-size: .82rem; padding: .4rem .55rem; border-radius: .6rem; background: rgba(var(--brand-rgb), .14); }
     .ts-dropdown .active { background: var(--brand-soft, #e7f6e3); color: inherit; }
   </style>
 
@@ -395,21 +400,36 @@
     document.addEventListener('DOMContentLoaded', function () { syncScanWindows(document); });
 
     // ---------------------------------------------------------------------
-    // Event form: start date suggests today (never earlier); AM scan windows
-    // take AM times and PM windows PM times (a time typed in the wrong half is
-    // moved to the right one), and an empty window suggests its default.
+    // Event form: start date suggests today (never earlier); a scan window is an
+    // hour + minute picker whose AM / PM half is fixed (AM slots offer morning
+    // hours, PM slots afternoon hours; noon closes AM-Out), and an empty window
+    // suggests its default. The hidden input carries the plain HH:MM that is posted.
     // ---------------------------------------------------------------------
     function pad2(n) { return (n < 10 ? '0' : '') + n; }
     function localISO(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
-    function fixPeriod(input) {
-      var v = input.value, period = input.getAttribute('data-period');
-      if (!v || !period) return;
-      var parts = v.split(':'), t = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
-      if (isNaN(t)) return;
-      if (period === 'AM' && t > 720) t = t < 780 ? 720 : t - 720;     // 12:xx PM -> noon, 1-11 PM -> AM
-      if (period === 'PM' && t < 720) t += 720;                          // 12-11 AM -> PM
-      var fixed = pad2(Math.floor(t / 60)) + ':' + pad2(t % 60);
-      if (fixed !== v.slice(0, 5)) input.value = fixed;
+    // picker -> hidden HH:MM (AM slot: hour 12 is noon, shown as PM and always :00)
+    function slotTimeSync(box) {
+      var period = box.getAttribute('data-period');
+      var hs = box.querySelector('.slot-time-h'), ms = box.querySelector('.slot-time-m');
+      var out = box.querySelector('input[type="hidden"]'), tag = box.querySelector('.slot-time-period');
+      var h = parseInt(hs.value, 10), noon = period === 'AM' && h === 12;
+      if (noon) ms.value = '0';
+      tag.textContent = noon ? 'PM' : period;
+      out.value = isNaN(h) || ms.value === '' ? '' : pad2(h) + ':' + pad2(parseInt(ms.value, 10));
+    }
+    // hidden HH:MM (or the suggested default) -> pickers, moved into the slot's half of the day
+    function slotTimeLoad(box) {
+      var period = box.getAttribute('data-period');
+      var hs = box.querySelector('.slot-time-h'), ms = box.querySelector('.slot-time-m');
+      var out = box.querySelector('input[type="hidden"]');
+      var v = out.value || out.getAttribute('data-default') || '';
+      var m = /^(\d{1,2}):(\d{2})/.exec(v);
+      if (!m) return;
+      var h = parseInt(m[1], 10), min = parseInt(m[2], 10);
+      if (period === 'AM') { if (h === 0) h = 1; else if (h > 12) h -= 12; if (h === 12) min = 0; }
+      else if (h < 12) h += 12;
+      hs.value = String(h); ms.value = String(min);
+      slotTimeSync(box);
     }
     function syncEventForm(scope) {
       var root = scope && scope.querySelectorAll ? scope : document;
@@ -426,33 +446,16 @@
           end.min = start.value || '';
           if (start.value && end.value && end.value < start.value) end.value = start.value;
         }
-        form.querySelectorAll('input[data-period]').forEach(function (inp) {
-          var label = form.querySelector('label[for="' + inp.id + '"]');
-          if (label && !label.querySelector('.period-tag')) {
-            var tag = document.createElement('span');
-            tag.className = 'period-tag badge text-bg-light border ms-1';
-            tag.textContent = inp.getAttribute('data-period');
-            label.appendChild(tag);
-          }
+        form.querySelectorAll('.slot-time').forEach(function (box) {
+          if (!box.getAttribute('data-ready')) { box.setAttribute('data-ready', '1'); slotTimeLoad(box); }
         });
       });
     }
-    document.addEventListener('focusin', function (e) {
-      var inp = e.target;
-      if (inp && inp.matches && inp.matches('input[data-period]') && !inp.value && inp.getAttribute('data-default')) {
-        inp.value = inp.getAttribute('data-default');
-      }
-    });
-    document.addEventListener('keydown', function (e) {
-      var inp = e.target;
-      if (!inp || !inp.matches || !inp.matches('input[data-period]')) return;
-      var k = (e.key || '').toLowerCase();
-      if ((inp.getAttribute('data-period') === 'AM' && k === 'p') || (inp.getAttribute('data-period') === 'PM' && k === 'a')) e.preventDefault();
-    });
     document.addEventListener('change', function (e) {
       var inp = e.target;
       if (!inp || !inp.matches) return;
-      if (inp.matches('input[data-period]')) fixPeriod(inp);
+      var box = inp.closest && inp.closest('.slot-time');
+      if (box) slotTimeSync(box);
       if (inp.name === 'start_date' || inp.name === 'end_date') syncEventForm(inp.form || document);
     });
     document.addEventListener('DOMContentLoaded', function () { syncEventForm(document); });
