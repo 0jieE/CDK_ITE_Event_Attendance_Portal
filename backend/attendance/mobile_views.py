@@ -22,7 +22,8 @@ from rest_framework.views import APIView
 from accounts.models import Instructor, Student
 from accounts.permissions import IsInstructor, IsStudent
 
-from .models import AttendanceLog, AttendanceType, Event, Fine, FineSlotPayment, QRCode, default_required_types
+from .models import (AttendanceLog, AttendanceType, Contribution, Event, Fine, FineSlotPayment, QRCode, Semester,
+                     default_required_types)
 from .mobile_serializers import (
     BalanceSerializer,
     QRCodeMobileSerializer,
@@ -31,18 +32,20 @@ from .mobile_serializers import (
     ScanResultSerializer,
     ScanSyncSerializer,
     StudentAttendanceSerializer,
+    StudentContributionSerializer,
     StudentFineSerializer,
     StudentMissedSlotSerializer,
     StudentPasswordChangeSerializer,
     StudentProfileSerializer,
     StudentProfileUpdateSerializer,
 )
-from . import services
+from . import contributions, services
 from .serializers import AttendanceLogSerializer, EventSerializer
 
 # Query parameters reused by several list endpoints.
 _EVENT_PARAM = OpenApiParameter("event", int, description="Filter by event id")
 _DATE_PARAM = OpenApiParameter("date", str, description="Filter by date (YYYY-MM-DD)")
+_SEMESTER_PARAM = OpenApiParameter("semester", str, description="A semester id, or 'active' (default: all)")
 
 
 # ===========================================================================
@@ -653,4 +656,42 @@ class StudentBalanceView(StudentScopedMixin, APIView):
             "outstanding": total(fines.filter(status=Fine.Status.UNPAID))
             - (fines.filter(status=Fine.Status.UNPAID).aggregate(s=Sum("amount_paid"))["s"] or Decimal("0.00")),
         }
+        dues = contributions.student_totals(student)
+        payload.update({
+            "contributions_total": dues["total"],
+            "contributions_paid": dues["paid"],
+            "contributions_outstanding": dues["outstanding"],
+            "total_outstanding": payload["outstanding"] + dues["outstanding"],
+        })
         return Response(BalanceSerializer(payload).data)
+
+
+class StudentContributionsView(StudentScopedMixin, generics.ListAPIView):
+    """The department contributions with the student's own standing, newest semester first.
+
+    Every student owes each contribution of a semester unless exempted (then ``owed`` is 0 and
+    ``status`` is ``EXEMPT``). Partial payments add up; each one is listed under ``payments``.
+    ``?semester=<id>`` or ``?semester=active`` narrows to one semester (default: all).
+    """
+
+    serializer_class = StudentContributionSerializer
+
+    @extend_schema(parameters=[_SEMESTER_PARAM])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):          # schema generation
+            return Contribution.objects.none()
+        student = self.get_student()
+        raw = self.request.query_params.get("semester", "")
+        semester = None
+        if raw == "active":
+            semester = Semester.current()
+            if semester is None:
+                return []
+        elif raw.isdigit():
+            semester = Semester.objects.filter(pk=raw).first()
+            if semester is None:
+                return []
+        return contributions.for_student(student, semester)

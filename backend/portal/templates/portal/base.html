@@ -593,7 +593,10 @@
     });
 
     document.body.addEventListener('htmx:beforeSwap', function (e) {
-      destroyDataTables(e.detail.target);
+      // A form the server rejects comes back as 422 with the form and its errors: show it
+      // (htmx 1.x swaps only 2xx/3xx answers, so without this the modal just sat there).
+      if (e.detail.xhr && e.detail.xhr.status === 422) { e.detail.shouldSwap = true; e.detail.isError = false; }
+      if (e.detail.shouldSwap) destroyDataTables(e.detail.target);
     });
     document.body.addEventListener('htmx:afterSwap', function (e) {
       // Show the modal when a form partial lands in it (wide dialog for long forms).

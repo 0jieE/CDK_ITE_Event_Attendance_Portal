@@ -4,6 +4,9 @@ from django.contrib import admin
 
 from .models import (
     AttendanceLog,
+    Contribution,
+    ContributionExemption,
+    ContributionPayment,
     Event,
     EventDayFine,
     Fine,
@@ -100,3 +103,25 @@ class FineAdmin(admin.ModelAdmin):
     list_filter = ("status", "needs_review", "event")
     search_fields = ("student__student_number",)
     readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(Contribution)
+class ContributionAdmin(_KeepRecordedDataMixin, admin.ModelAdmin):
+    list_display = ("name", "semester", "amount", "due_date")
+    list_filter = ("semester",)
+    search_fields = ("name",)
+
+
+@admin.register(ContributionExemption)
+class ContributionExemptionAdmin(admin.ModelAdmin):
+    list_display = ("student", "contribution", "reason", "recorded_by", "created_at")
+    list_filter = ("contribution",)
+    search_fields = ("student__student_number",)
+
+
+@admin.register(ContributionPayment)
+class ContributionPaymentAdmin(admin.ModelAdmin):
+    list_display = ("student", "contribution", "amount", "paid_at", "recorded_by", "note")
+    list_filter = ("contribution",)
+    search_fields = ("student__student_number",)
+    readonly_fields = ("ref", "created_at")

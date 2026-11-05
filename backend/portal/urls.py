@@ -3,6 +3,7 @@
 from django.urls import path
 
 from . import views
+from .contribution_views import ContributionsSection
 
 app_name = "portal"
 
@@ -42,3 +43,6 @@ urlpatterns = [
 # Register every declarative CRUD section's URLs.
 for section in views.SECTIONS:
     urlpatterns += section.get_urls()
+
+# Department contributions: the page, add/edit/delete, payments and exemptions.
+urlpatterns += ContributionsSection().get_urls()

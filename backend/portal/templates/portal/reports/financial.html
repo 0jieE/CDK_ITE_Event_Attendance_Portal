@@ -13,9 +13,22 @@
 
 <div class="card">
   <div class="card-body">
-    {% include "portal/reports/partials/filters.html" with action_url=request.path %}
+    {% include "portal/reports/partials/filters.html" with action_url=request.path contrib_csv=True %}
 
     {% include "portal/partials/print_head.html" with title="Financial Report" subtitle=print_subtitle %}
+    <div class="row g-2 mb-3">
+      <div class="col-12 col-md-4"><div class="border rounded p-2 h-100">
+        <div class="small text-muted">Total due (fines + contributions)</div><div class="fs-5 fw-semibold">₱{{ grand.due }}</div>
+      </div></div>
+      <div class="col-6 col-md-4"><div class="border rounded p-2 h-100">
+        <div class="small text-muted">Collected</div><div class="fs-5 fw-semibold text-success">₱{{ grand.collected }}</div>
+      </div></div>
+      <div class="col-6 col-md-4"><div class="border rounded p-2 h-100">
+        <div class="small text-muted">Outstanding</div><div class="fs-5 fw-semibold text-danger">₱{{ grand.outstanding }}</div>
+      </div></div>
+    </div>
+
+    <h6 class="mt-2"><i class="bi bi-cash-coin"></i> Fines</h6>
     <div class="table-responsive">
       <table class="table table-sm table-striped align-middle">
         <thead>
@@ -42,8 +55,63 @@
             <tr><td colspan="8" class="text-center text-muted py-4">No data for the selected filters.</td></tr>
           {% endfor %}
         </tbody>
+        {% if rows|length > 1 %}
+          <tfoot>
+            <tr class="fw-bold">
+              <td colspan="3" class="text-end">Total</td>
+              <td class="text-end">₱{{ fine_totals.total_issued }}</td>
+              <td class="text-end text-success">₱{{ fine_totals.collected }}</td>
+              <td class="text-end text-danger">₱{{ fine_totals.outstanding }}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        {% endif %}
       </table>
     </div>
+
+    <h6 class="mt-4"><i class="bi bi-wallet2"></i> Department contributions</h6>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle">
+        <thead>
+          <tr>
+            <th>Contribution</th><th>Semester</th><th class="text-end">Per student</th>
+            <th class="text-end">Students</th><th class="text-end">Expected</th>
+            <th class="text-end">Collected</th><th class="text-end">Outstanding</th>
+            <th class="text-end">Paid</th><th class="text-end">Part-paid</th><th class="text-end">Unpaid</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in contrib_rows %}
+            <tr>
+              <td>{{ r.contribution }}</td>
+              <td>{{ r.semester }}</td>
+              <td class="text-end">₱{{ r.amount }}</td>
+              <td class="text-end">{{ r.students }}{% if r.exempt %} <span class="small text-muted">(+{{ r.exempt }} exempt)</span>{% endif %}</td>
+              <td class="text-end">₱{{ r.expected }}</td>
+              <td class="text-end text-success">₱{{ r.collected }}</td>
+              <td class="text-end text-danger">₱{{ r.outstanding }}</td>
+              <td class="text-end">{{ r.paid_count }}</td>
+              <td class="text-end">{{ r.partial_count }}</td>
+              <td class="text-end">{{ r.unpaid_count }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="10" class="text-center text-muted py-4">No contributions for the selected semester.</td></tr>
+          {% endfor %}
+        </tbody>
+        {% if contrib_rows|length > 1 %}
+          <tfoot>
+            <tr class="fw-bold">
+              <td colspan="4" class="text-end">Total</td>
+              <td class="text-end">₱{{ contrib_totals.expected }}</td>
+              <td class="text-end text-success">₱{{ contrib_totals.collected }}</td>
+              <td class="text-end text-danger">₱{{ contrib_totals.outstanding }}</td>
+              <td colspan="3"></td>
+            </tr>
+          </tfoot>
+        {% endif %}
+      </table>
+    </div>
+    <p class="small text-muted mb-0 no-print">The event and date filters apply to fines only; contributions follow the semester filter.</p>
   </div>
 </div>
 {% endblock %}

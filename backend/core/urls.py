@@ -45,6 +45,7 @@ from attendance.mobile_views import (
     StudentAttendanceView,
     StudentMissedSlotsView,
     StudentBalanceView,
+    StudentContributionsView,
     StudentEventsView,
     StudentFinesView,
     StudentPasswordView,
@@ -89,6 +90,7 @@ api_patterns = [
     path("student/missed-slots/", StudentMissedSlotsView.as_view(), name="student-missed-slots"),
     path("student/fines/", StudentFinesView.as_view(), name="student-fines"),
     path("student/balance/", StudentBalanceView.as_view(), name="student-balance"),
+    path("student/contributions/", StudentContributionsView.as_view(), name="student-contributions"),
     # Dashboard & reports
     path("dashboard/", dashboard, name="dashboard"),
     path("reports/attendance/", attendance_report, name="report-attendance"),

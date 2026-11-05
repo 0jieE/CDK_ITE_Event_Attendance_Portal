@@ -193,11 +193,62 @@ class StudentFineSerializer(serializers.ModelSerializer):
 
 
 class BalanceSerializer(serializers.Serializer):
-    """Aggregated fines balance for ``GET /api/student/balance/``."""
+    """Aggregated balance for ``GET /api/student/balance/``.
+
+    ``total_fines`` / ``total_paid`` / ``outstanding`` are the FINES only (unchanged); the
+    ``contributions_*`` keys cover the department contributions, and ``total_outstanding`` is
+    everything still owed (fines + contributions).
+    """
 
     total_fines = serializers.DecimalField(max_digits=12, decimal_places=2)
     total_paid = serializers.DecimalField(max_digits=12, decimal_places=2)
     outstanding = serializers.DecimalField(max_digits=12, decimal_places=2)
+    contributions_total = serializers.DecimalField(max_digits=12, decimal_places=2)
+    contributions_paid = serializers.DecimalField(max_digits=12, decimal_places=2)
+    contributions_outstanding = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_outstanding = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class StudentContributionPaymentSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    paid_at = serializers.DateTimeField()
+    note = serializers.CharField()
+
+
+class StudentContributionSerializer(serializers.Serializer):
+    """One department contribution with the student's own standing (computed per student)."""
+
+    id = serializers.IntegerField(source="contribution.id")
+    name = serializers.CharField(source="contribution.name")
+    description = serializers.CharField(source="contribution.description")
+    semester = serializers.IntegerField(source="contribution.semester_id")
+    semester_name = serializers.SerializerMethodField()
+    is_active_semester = serializers.BooleanField(source="contribution.semester.is_active")
+    amount = serializers.DecimalField(source="contribution.amount", max_digits=10, decimal_places=2)
+    due_date = serializers.DateField(source="contribution.due_date", allow_null=True)
+    owed = serializers.DecimalField(max_digits=10, decimal_places=2)
+    paid = serializers.DecimalField(max_digits=10, decimal_places=2)
+    balance = serializers.DecimalField(max_digits=10, decimal_places=2)
+    status = serializers.CharField()
+    status_display = serializers.SerializerMethodField()
+    exempt = serializers.SerializerMethodField()
+    exemption_reason = serializers.SerializerMethodField()
+    payments = StudentContributionPaymentSerializer(many=True)
+
+    def get_semester_name(self, row) -> str:
+        return str(row["contribution"].semester)
+
+    def get_status_display(self, row) -> str:
+        from .contributions import STATUS_LABELS
+
+        return STATUS_LABELS[row["status"]]
+
+    def get_exempt(self, row) -> bool:
+        return row["exemption"] is not None
+
+    def get_exemption_reason(self, row) -> str:
+        return row["exemption"].reason if row["exemption"] is not None else ""
 
 
 class StudentProfileUpdateSerializer(serializers.Serializer):

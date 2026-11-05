@@ -161,9 +161,9 @@ endpoints require the `IsAdmin` role.**
 | `fines/` | list/retrieve/update | `?event=&student=&status=&needs_review=` |
 | `fines/calculate/` | POST | body `{ "event_id": N }` → runs the fines calculator |
 | `fines/{id}/mark-paid/` | POST | records cash turned over to the treasurer for all the remaining slots (`amount_paid` / `balance` are in the payload; `PATCH {"status"}` pays / un-pays too) |
-| `dashboard/` | GET | totals + per-event breakdown |
+| `dashboard/` | GET | totals + per-event breakdown; `contributions` = `{rows, expected, collected, outstanding, count}` for the same semester |
 | `reports/attendance/` | GET | `?semester=&event=&date_from=&date_to=`; `&format=csv` to download |
-| `reports/financial/` | GET | same filters; `&format=csv` to download |
+| `reports/financial/` | GET | same filters; `results` = fines per event, `contributions` = the semester's department contributions (expected / collected / outstanding / paid / part-paid / unpaid counts); `&format=csv` downloads the fines, `&format=csv&part=contributions` the contributions |
 
 ### Student accounts (no self sign-up)
 
@@ -209,7 +209,7 @@ student a username and password:
 | `GET /api/student/profile/` | student | own profile incl. name, username, year/section, photo |
 | `PATCH /api/student/profile/` | student | edit own first/middle/last name and username (student no., year, section are admin-only) |
 | `POST /api/student/profile/password/` | student | change own password (current + new; Django validators; rate-limited) |
-| `GET /api/student/events/` (`?all=true` for past events too), `attendance/` (`?event=`), `missed-slots/` (`?event=`: the required slots missed so far - date, slot, scan window, rate, `paid` - newest first, same rule as the fines), `fines/`, `balance/` | student | own data only |
+| `GET /api/student/events/` (`?all=true` for past events too), `attendance/` (`?event=`), `missed-slots/` (`?event=`: the required slots missed so far - date, slot, scan window, rate, `paid` - newest first, same rule as the fines), `fines/`, `balance/` (fines keys `total_fines` / `total_paid` / `outstanding`, plus `contributions_total` / `contributions_paid` / `contributions_outstanding` and `total_outstanding` = fines + contributions), `contributions/` (`?semester=<id>` or `active`; each department contribution with the student's `owed` / `paid` / `balance` / `status` PAID-PARTIAL-UNPAID-EXEMPT, `exempt` + `exemption_reason`, and the `payments` list, newest semester first) | student | own data only |
 | `POST /api/student/qr/generate/` | student | create today's QR for an event - **today only** (other dates are rejected), once per event-day, idempotent |
 | `GET /api/student/qr/` (`?event=&date=`) | student | list own QR codes (used to show an already-generated QR) |
 
@@ -345,11 +345,12 @@ The portal is designed phone-first (`portal/static/portal/css/mobile.css`, `js/m
 | Instructors | `/portal/instructors/` | creates + links the `User` in one form |
 | Students | `/portal/students/` | linked `User` + `student_number` + **year level & section**; **Import masterlist** (CSV/Excel) + printable credentials |
 | Events | `/portal/events/` | dates + `required_types` multi-select; validates `end ≥ start`; **fine per day** for multi-day events; an **Active** switch in the table (with a confirmation) turns an event on/off - an inactive event is hidden from instructors, rejects scans and stops auto-updating fines |
-| **Reports** (sidebar group) | — | Attendance Report, Attendance Logs, Financial Report, Fines |
+| **Reports** (sidebar group) | — | Attendance Report, Attendance Logs, Financial Report, Fines, Contributions |
 | ↳ Attendance Logs | `/portal/attendance_logs/` | **read-only**, two tabs: **By Event** (event, section, type) and **By Student** (student, event, type); the **semester** filter (default: the **active** semester) applies to both. No status column/filter: only scans are stored (a log = present), absences are never recorded as rows. **Download CSV** + **Print** (printed page = ITE logo + event or student name header + the table only) |
 | ↳ Attendance Report | `/portal/reports/attendance/` | filters + **Download CSV** + **Print** |
-| ↳ Financial Report | `/portal/reports/financial/` | filters + **Download CSV** + **Print** |
+| ↳ Financial Report | `/portal/reports/financial/` | fines per event, then the **department contributions** of the semester, with grand totals (fines + contributions); filters + **Download CSV (fines)** / **(contributions)** + **Print** |
 | ↳ Fines | `/portal/fines/` | lives under Reports; see below |
+| ↳ Contributions | `/portal/contributions/` | department contributions; see below |
 | **Settings** (sidebar group) | — | Appearance, School Years & Semesters |
 | ↳ Appearance | `/portal/settings/` | UI theme, light/dark mode, branding & logo |
 | ↳ School Years & Semesters | `/portal/terms/` | **one table** (School Year \| Semester \| Events \| Actions, a row per semester) with **Add School Year** and **Add Semester** buttons. A semester can be marked **Active** (badge + **Set active** button; Set active still works when the semester has events): it is the default filter on the attendance logs and the default semester of a new event. **A school year, semester or event that already has attendance records (or recorded fine payments) can be edited but never deleted** - the delete button is replaced by a lock and the server/API/Django admin refuse it for everyone, Super Admin included. Once events exist under a school year or semester, Edit/Delete are hidden (and refused by the server and API) for the adviser - only the Super Admin can change it |
@@ -381,6 +382,23 @@ filters, then only the table; paid/pay buttons are not printed) and the student 
 > free text used to create duplicates such as `a`, ` A`, `Section A`; existing data was normalised
 > by migration `accounts/0007`). Both are editable on the student form, imported from the
 > masterlist (Section must be A–G) and drive the year/section filters above.
+
+#### Department contributions (`/portal/contributions/`)
+Besides fines, students pay **department contributions**: named amounts per **semester** (e.g. Department fee,
+T-shirt) that **every student owes** - there is no enrollment, the same as events.
+* **Add Contribution** - semester (default: the active one), name (unique per semester, ignoring case),
+  amount per student, optional due date and description. Edit any time; the amount can't drop below what a
+  student already paid, and a contribution with payments can't be deleted (nor can its semester / school year).
+* **By Contribution** - the semester's contributions with expected / collected / outstanding, then the chosen
+  one's ledger of every student (filter by status / year / section). **Pay** opens a modal that defaults to the
+  whole balance; a smaller amount is a **partial payment** (each payment is kept with its date, note and who
+  recorded it, and can be **undone**). A payment can never exceed the balance, and a double-click / re-sent form
+  is recorded once. **Exempt** (asks for an optional reason) removes the amount for that student; a student who
+  already paid something must have the payments undone first.
+* **By Student** - one student's statement of every contribution with payments, Pay / Exempt / Undo, printable.
+* Contributions appear on the **Dashboard**, the **Financial Report** (+ CSV) and the student app
+  (`/api/student/contributions/`, `/api/student/balance/`). Recording them needs a connection (they are not
+  queued offline like fine payments); the pages themselves are saved for offline viewing.
 
 #### Settings & branding (`/portal/settings/`)
 A singleton `PortalSettings` row (editable here or in Django admin) controls the

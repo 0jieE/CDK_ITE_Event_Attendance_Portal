@@ -18,7 +18,7 @@ from django.contrib.auth.password_validation import validate_password
 
 from accounts.images import validate_image_file
 from accounts.models import Instructor, Student
-from attendance.models import AttendanceType, Event, EventDayFine, SchoolYear, Semester
+from attendance.models import AttendanceType, Contribution, Event, EventDayFine, SchoolYear, Semester
 
 from .models import PortalSettings
 
@@ -491,6 +491,78 @@ class FineCalculateForm(forms.Form):
         widget=forms.Select(attrs={"class": "form-select"}),
         help_text="Re-running is safe; paid fines are never overwritten.",
     )
+
+
+# ---------------------------------------------------------------------------
+# Department contributions
+# ---------------------------------------------------------------------------
+class ContributionForm(BootstrapModelForm):
+    """A named contribution of one semester that every student owes."""
+
+    class Meta:
+        model = Contribution
+        fields = ["semester", "name", "amount", "due_date", "description"]
+        labels = {"amount": "Amount per student (₱)", "due_date": "Due date (optional)"}
+        help_texts = {"name": "e.g. Department fee, T-shirt, Acquaintance party."}
+        widgets = {"due_date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["semester"].queryset = Semester.objects.select_related("school_year").order_by(
+            "-school_year__sy", "name")
+        self.fields["amount"].widget.attrs.update({"min": "0.01", "step": "0.01"})
+        if not self.instance.pk and not self.is_bound:
+            self.fields["semester"].initial = Semester.current()
+        if self.instance.pk and self.instance.payments.exists():
+            self.fields["semester"].disabled = True
+            self.fields["semester"].help_text = "Payments are recorded, so the semester can no longer change."
+
+    def clean_amount(self):
+        amount = self.cleaned_data["amount"]
+        if self.instance.pk:
+            top = self.instance.highest_paid()
+            if amount < top:
+                raise forms.ValidationError(f"A student already paid ₱{top}, so the amount cannot be lower than that.")
+        return amount
+
+    def clean_name(self):
+        return " ".join(self.cleaned_data["name"].split())
+
+    def clean(self):
+        cleaned = super().clean()
+        semester, name = cleaned.get("semester"), cleaned.get("name")
+        if semester and name and (Contribution.objects.filter(semester=semester, name__iexact=name)
+                                  .exclude(pk=self.instance.pk).exists()):
+            self.add_error("name", "This semester already has a contribution with that name.")
+        return cleaned
+
+
+class ContributionPaymentForm(forms.Form):
+    """Cash received from one student for one contribution (defaults to the whole balance)."""
+
+    amount = forms.DecimalField(
+        label="Amount received (₱)", max_digits=10, decimal_places=2, min_value=Decimal("0.01"),
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0.01"}),
+    )
+    note = forms.CharField(
+        label="Note (optional)", max_length=255, required=False,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g. OR no. 0123"}),
+    )
+    ref = forms.CharField(max_length=40, required=False, widget=forms.HiddenInput)
+
+    def __init__(self, *args, balance=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.balance = balance
+        if balance is not None:
+            self.fields["amount"].widget.attrs["max"] = str(balance)
+            if not self.is_bound:
+                self.fields["amount"].initial = balance
+
+    def clean_amount(self):
+        amount = self.cleaned_data["amount"]
+        if self.balance is not None and amount > self.balance:
+            raise forms.ValidationError(f"That is more than the balance (₱{self.balance}).")
+        return amount
 
 
 # ---------------------------------------------------------------------------

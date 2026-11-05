@@ -22,11 +22,12 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from accounts.models import Instructor, Student
-from attendance import services
+from attendance import contributions, services
 from attendance.tasks import recompute_event_fines
 from attendance.models import (
     AttendanceLog,
     AttendanceType,
+    ContributionPayment,
     Event,
     Fine,
     SchoolYear,
@@ -200,6 +201,7 @@ def terms_view(request):
     # semesters with attendance / paid fines can be edited but never deleted
     recorded = set(AttendanceLog.objects.values_list("event__semester_id", flat=True).distinct())
     recorded |= set(Fine.objects.filter(amount_paid__gt=0).values_list("event__semester_id", flat=True).distinct())
+    recorded |= set(ContributionPayment.objects.values_list("contribution__semester_id", flat=True).distinct())
     for sy in school_years:
         sy.sem_list = list(sy.semesters.all())
         for sem in sy.sem_list:
@@ -373,7 +375,7 @@ def offline_manifest_view(request):
         "/portal/", "/portal/instructors/", "/portal/students/", "/portal/events/", "/portal/terms/",
         "/portal/attendance_logs/", "/portal/attendance_logs/?tab=student", "/portal/reports/attendance/",
         "/portal/reports/financial/", "/portal/fines/", "/portal/fines/?view=student", "/portal/settings/",
-        "/portal/students/import/",
+        "/portal/students/import/", "/portal/contributions/", "/portal/contributions/?view=student",
     ]
     if semester:
         events = list(Event.objects.filter(semester=semester).order_by("-start_date")[:40])
@@ -758,7 +760,6 @@ def fines_calculate_view(request):
     )
 
 
-@admin_required
 def _replay_time(request):
     """The real time of an action that was queued offline (``X-Offline-Time``), else ``None``.
 
@@ -779,6 +780,7 @@ def _replay_time(request):
     return when
 
 
+@admin_required
 def fines_mark_paid_view(request, pk):
     """Record that a fine was settled in cash with the treasurer."""
     fine = get_object_or_404(Fine, pk=pk)
@@ -922,11 +924,32 @@ def report_attendance_view(request):
 
 @admin_required
 def report_financial_view(request):
-    rows = services.financial_report(**_report_filters(request))
+    """Fines per event, then the department contributions of the chosen semester.
+
+    The event and date filters narrow the fines only (a contribution belongs to a semester, not an
+    event). ``?format=csv`` downloads the fines; ``?format=csv&part=contributions`` the contributions.
+    """
+    filters = _report_filters(request)
+    if request.GET.get("format") == "csv" and request.GET.get("part") == "contributions":
+        return _csv_response(contributions.report(semester=filters["semester"]), "contributions_report.csv")
+    rows = services.financial_report(**filters)
     if request.GET.get("format") == "csv":
         return _csv_response(rows, "financial_report.csv")
     ctx = _report_context(request, "financial")
-    ctx["rows"] = rows
+    contrib_rows = contributions.report(semester=filters["semester"])
+    fine_totals = {k: sum((r[k] for r in rows), Decimal("0.00")) for k in ("total_issued", "collected", "outstanding")}
+    contrib_totals = contributions.totals(contrib_rows)
+    ctx.update({
+        "rows": rows,
+        "fine_totals": fine_totals,
+        "contrib_rows": contrib_rows,
+        "contrib_totals": contrib_totals,
+        "grand": {
+            "due": fine_totals["total_issued"] + contrib_totals["expected"],
+            "collected": fine_totals["collected"] + contrib_totals["collected"],
+            "outstanding": fine_totals["outstanding"] + contrib_totals["outstanding"],
+        },
+    })
     return render(request, "portal/reports/financial.html", ctx)
 
 

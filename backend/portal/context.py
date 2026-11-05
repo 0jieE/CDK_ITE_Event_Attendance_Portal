@@ -22,6 +22,7 @@ _NAV = [
         {"key": "attendance_logs", "label": "Attendance Logs", "url": "portal:attendance_logs-list", "icon": "card-checklist"},
         {"key": "reports_financial", "label": "Financial Report", "url": "portal:reports-financial", "icon": "cash-stack"},
         {"key": "fines", "label": "Fines", "url": "portal:fines-list", "icon": "cash-coin"},
+        {"key": "contributions", "label": "Contributions", "url": "portal:contributions-list", "icon": "wallet2"},
     ]},
     {"key": "settings_group", "label": "Settings", "icon": "gear", "children": [
         {"key": "settings", "label": "Appearance", "url": "portal:settings", "icon": "palette"},

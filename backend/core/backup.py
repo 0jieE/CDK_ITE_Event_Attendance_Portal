@@ -6,7 +6,7 @@ the admin: **download** the data as one JSON file, and **restore** it into a fre
 (deploy against a new database, log in as the Super Admin, upload the file).
 
 What is saved: every row of ``accounts`` (users incl. password hashes, instructors, students),
-``attendance`` (school years ... fines and slot payments) and ``portal`` (branding settings).
+``attendance`` (school years ... fines, slot payments and contributions) and ``portal`` (branding settings).
 Images (profile photos, QR codes, the portal logo) live on Cloudinary and are referenced by
 path, so they are not part of the file and survive a database loss.
 
@@ -48,7 +48,8 @@ def build_backup():
 def summary():
     """Row counts shown on the backup page (what a backup taken now would contain)."""
     from accounts.models import Instructor, Student, User
-    from attendance.models import AttendanceLog, Event, Fine, FineSlotPayment, QRCode, Semester
+    from attendance.models import (AttendanceLog, Contribution, ContributionPayment, Event, Fine,
+                                   FineSlotPayment, QRCode, Semester)
 
     return [
         ("Users", User.objects.count()),
@@ -60,6 +61,8 @@ def summary():
         ("QR codes", QRCode.objects.count()),
         ("Fines", Fine.objects.count()),
         ("Fine slot payments", FineSlotPayment.objects.count()),
+        ("Contributions", Contribution.objects.count()),
+        ("Contribution payments", ContributionPayment.objects.count()),
     ]
 
 

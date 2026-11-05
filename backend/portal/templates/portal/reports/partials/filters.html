@@ -35,8 +35,13 @@ Submits as a normal GET (full page) so the printable table reflects filters;
   </div>
   <div class="col-12 mt-2 d-flex flex-wrap gap-2">
     <a class="btn btn-outline-secondary btn-sm" href="?{{ request.GET.urlencode }}&format=csv">
-      <i class="bi bi-filetype-csv"></i> Download CSV
+      <i class="bi bi-filetype-csv"></i> Download CSV{% if contrib_csv %} (fines){% endif %}
     </a>
+    {% if contrib_csv %}
+      <a class="btn btn-outline-secondary btn-sm" href="?{{ request.GET.urlencode }}&format=csv&part=contributions">
+        <i class="bi bi-filetype-csv"></i> Download CSV (contributions)
+      </a>
+    {% endif %}
     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
       <i class="bi bi-printer"></i> Print
     </button>

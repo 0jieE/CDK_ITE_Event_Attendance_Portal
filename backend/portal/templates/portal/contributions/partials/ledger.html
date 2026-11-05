@@ -1,0 +1,152 @@
+{% comment %}
+By Contribution: the semester's contributions (overview) and, for the chosen one, every student's
+standing with Pay / Exempt actions.
+{% endcomment %}
+{% if not contributions %}
+  <div class="text-center text-muted py-5">
+    <i class="bi bi-wallet2 fs-1 d-block mb-2"></i>
+    No contributions {% if semester %}for {{ semester }}{% else %}yet{% endif %}.
+    <div class="mt-3 no-print">
+      <button class="btn btn-primary btn-sm"
+              hx-get="{% url 'portal:contributions-add' %}" hx-target="#modalContent" hx-swap="innerHTML">
+        <i class="bi bi-plus-lg"></i> Add Contribution
+      </button>
+    </div>
+  </div>
+{% else %}
+  {# Overview of every contribution in the semester (hidden on print: the print is about one contribution). #}
+  <div class="table-responsive mb-4 no-print">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Contribution</th>{% if not filters.semester %}<th>Semester</th>{% endif %}
+          <th class="text-end">Per student</th><th>Due</th>
+          <th class="text-end">Expected</th><th class="text-end">Collected</th><th class="text-end">Outstanding</th>
+          <th class="text-end">Paid / Part / Unpaid</th><th class="text-end">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in overview %}
+          <tr {% if contribution and contribution.id == r.contribution_id %}class="table-active"{% endif %}>
+            <td>
+              <a href="?view=contribution&semester={{ filters.semester }}&contribution={{ r.contribution_id }}" class="fw-semibold">{{ r.contribution }}</a>
+            </td>
+            {% if not filters.semester %}<td>{{ r.semester }}</td>{% endif %}
+            <td class="text-end">₱{{ r.amount }}</td>
+            <td class="text-nowrap">{{ r.due_date|date:"M d, Y"|default:"—" }}</td>
+            <td class="text-end">₱{{ r.expected }}</td>
+            <td class="text-end text-success">₱{{ r.collected }}</td>
+            <td class="text-end text-danger">₱{{ r.outstanding }}</td>
+            <td class="text-end">{{ r.paid_count }} / {{ r.partial_count }} / {{ r.unpaid_count }}{% if r.exempt %}<div class="small text-muted">{{ r.exempt }} exempt</div>{% endif %}</td>
+            <td class="text-end text-nowrap">
+              <button class="btn btn-sm btn-outline-primary" title="Edit"
+                      hx-get="{% url 'portal:contributions-edit' r.contribution_id %}" hx-target="#modalContent" hx-swap="innerHTML">
+                <i class="bi bi-pencil"></i>
+              </button>
+              {% if r.collected or r.paid_count or r.partial_count %}
+                <span class="btn btn-sm disabled text-muted border" title="Has payments - it can be edited but not deleted"><i class="bi bi-lock"></i></span>
+              {% else %}
+                <button class="btn btn-sm btn-outline-danger" title="Delete"
+                        hx-post="{% url 'portal:contributions-delete' r.contribution_id %}"
+                        hx-confirm="Delete the contribution “{{ r.contribution }}”? This cannot be undone."
+                        hx-swap="none">
+                  <i class="bi bi-trash"></i>
+                </button>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+      {% if overview|length > 1 %}
+        <tfoot>
+          <tr class="fw-bold">
+            <td colspan="{% if filters.semester %}3{% else %}4{% endif %}" class="text-end">Total</td>
+            <td class="text-end">₱{{ overview_totals.expected }}</td>
+            <td class="text-end text-success">₱{{ overview_totals.collected }}</td>
+            <td class="text-end text-danger">₱{{ overview_totals.outstanding }}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      {% endif %}
+    </table>
+  </div>
+
+  {% if contribution %}
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-2">
+      <div>
+        <h5 class="mb-0">{{ contribution.name }} <span class="text-muted fw-normal">· ₱{{ contribution.amount }} per student</span></h5>
+        <div class="small text-muted">
+          {{ contribution.semester }}{% if contribution.due_date %} · due {{ contribution.due_date|date:"M d, Y" }}{% endif %}{% if contribution.description %} · {{ contribution.description }}{% endif %}
+        </div>
+      </div>
+      {% if summary %}
+        <div class="small text-md-end">
+          Collected <strong class="text-success">₱{{ summary.collected }}</strong> of ₱{{ summary.expected }}
+          · Outstanding <strong class="text-danger">₱{{ summary.outstanding }}</strong>
+          <div class="text-muted">{{ summary.paid_count }} paid · {{ summary.partial_count }} part-paid · {{ summary.unpaid_count }} unpaid{% if summary.exempt_count %} · {{ summary.exempt_count }} exempt{% endif %}</div>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle datatable" id="contribTable" width="100%">
+        <thead>
+          <tr>
+            <th>Student</th><th>Year &amp; Sec</th><th class="text-end">Owed</th><th class="text-end">Paid</th>
+            <th class="text-end">Balance</th><th>Status</th><th class="text-end no-print">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+            <tr>
+              <td>{{ r.student.student_number }} — {{ r.student.user.get_full_name|default:r.student.user.username }}</td>
+              <td>{{ r.student.year_section|default:"—" }}</td>
+              <td class="text-end">₱{{ r.owed }}</td>
+              <td class="text-end">₱{{ r.paid }}</td>
+              <td class="text-end">₱{{ r.balance }}</td>
+              <td>
+                {% include "portal/contributions/partials/status_badge.html" with status=r.status %}
+                {% if r.exemption and r.exemption.reason %}<div class="small text-muted">{{ r.exemption.reason }}</div>{% endif %}
+              </td>
+              <td class="text-end text-nowrap no-print">
+                {% if r.status == 'EXEMPT' %}
+                  <button class="btn btn-sm btn-outline-secondary"
+                          hx-post="{% url 'portal:contributions-unexempt' contribution.id %}" hx-vals='{"student": "{{ r.student.id }}"}'
+                          hx-confirm="Remove the exemption? {{ r.student.student_number }} will owe ₱{{ contribution.amount }} again."
+                          hx-swap="none">
+                    <i class="bi bi-arrow-counterclockwise"></i> Unexempt
+                  </button>
+                {% else %}
+                  <button class="btn btn-sm {% if r.status == 'PAID' %}btn-outline-secondary{% else %}btn-success{% endif %}"
+                          hx-get="{% url 'portal:contributions-pay' contribution.id %}?student={{ r.student.id }}"
+                          hx-target="#modalContent" hx-swap="innerHTML">
+                    {% if r.status == 'PAID' %}<i class="bi bi-receipt"></i> Payments{% else %}<i class="bi bi-cash-coin"></i> Pay{% endif %}
+                  </button>
+                  {% if not r.paid %}
+                    <button class="btn btn-sm btn-outline-secondary" title="Exempt this student"
+                            hx-post="{% url 'portal:contributions-exempt' contribution.id %}" hx-vals='{"student": "{{ r.student.id }}"}'
+                            hx-prompt="Exempt {{ r.student.student_number }} from {{ contribution.name }}? Reason (optional):"
+                            hx-swap="none">
+                      Exempt
+                    </button>
+                  {% endif %}
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        {% if rows %}
+          <tfoot>
+            <tr class="fw-bold">
+              <td colspan="2" class="text-end">Total ({{ rows|length }} student{{ rows|length|pluralize }})</td>
+              <td class="text-end">₱{{ row_totals.owed }}</td>
+              <td class="text-end">₱{{ row_totals.paid }}</td>
+              <td class="text-end">₱{{ row_totals.balance }}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  {% endif %}
+{% endif %}

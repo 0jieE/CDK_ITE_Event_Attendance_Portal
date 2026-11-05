@@ -341,6 +341,8 @@ def build_dashboard(semester=None, all_semesters=False):
             }
         )
 
+    from . import contributions
+
     return {
         "semester": str(semester) if semester is not None else None,
         "semester_id": semester.pk if semester is not None else None,
@@ -349,6 +351,8 @@ def build_dashboard(semester=None, all_semesters=False):
         "total_collected": _money_sum(fines, "amount_paid"),
         "total_outstanding": _outstanding(fines),
         "events": per_event,
+        # department contributions of the same semester: {rows, expected, collected, outstanding, count}
+        "contributions": contributions.semester_summary(semester),
     }
 
 

@@ -1,0 +1,73 @@
+{% comment %}
+Record a contribution payment (modal). The amount defaults to the whole balance; a smaller
+amount is a partial payment. Earlier payments are listed with an Undo button.
+{% endcomment %}
+<div class="modal-header">
+  <h5 class="modal-title">{{ contribution.name }} · ₱{{ contribution.amount }}</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<form {% if form %}hx-post="{{ post_url }}" hx-target="#modalContent" hx-swap="innerHTML"{% endif %}
+      class="d-flex flex-column overflow-hidden">
+  {% csrf_token %}
+  <div class="modal-body overflow-auto">
+    <div class="mb-3">
+      <div class="fw-semibold">{{ student.student_number }} — {{ student.user.get_full_name|default:student.user.username }}</div>
+      <div class="small text-muted">{% if student.year_section %}{{ student.year_section }} · {% endif %}{{ contribution.semester }}</div>
+      <div class="mt-1">
+        Paid <strong>₱{{ standing.paid }}</strong> · Balance <strong class="{% if standing.balance %}text-danger{% else %}text-success{% endif %}">₱{{ standing.balance }}</strong>
+        {% include "portal/contributions/partials/status_badge.html" with status=standing.status %}
+      </div>
+    </div>
+
+    {% if form %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger py-2">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>
+      {% endif %}
+      {{ form.ref }}
+      <div class="row g-3">
+        <div class="col-12 col-sm-5">
+          <label class="form-label" for="{{ form.amount.id_for_label }}">{{ form.amount.label }}</label>
+          {{ form.amount }}
+          {% for e in form.amount.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+          <div class="form-text">Less than the balance is a partial payment.</div>
+        </div>
+        <div class="col-12 col-sm-7">
+          <label class="form-label" for="{{ form.note.id_for_label }}">{{ form.note.label }}</label>
+          {{ form.note }}
+          {% for e in form.note.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+        </div>
+      </div>
+    {% elif standing.status == 'EXEMPT' %}
+      <div class="alert alert-secondary py-2 mb-0">This student is exempted from this contribution.</div>
+    {% else %}
+      <div class="alert alert-success py-2 mb-0"><i class="bi bi-check-circle"></i> Fully paid.</div>
+    {% endif %}
+
+    {% if payments %}
+      <div class="form-section mt-4"><i class="bi bi-receipt"></i> Payments</div>
+      <ul class="list-group list-group-flush mt-2">
+        {% for p in payments %}
+          <li class="list-group-item px-0 d-flex justify-content-between align-items-center gap-2">
+            <div>
+              <strong>₱{{ p.amount }}</strong> <span class="text-muted small">· {{ p.paid_at|date:"M d, Y g:i A" }}{% if p.recorded_by %} · by {{ p.recorded_by }}{% endif %}</span>
+              {% if p.note %}<div class="small text-muted">{{ p.note }}</div>{% endif %}
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger" title="Undo this payment"
+                    hx-post="{% url 'portal:contributions-payment-undo' p.id %}"
+                    hx-confirm="Undo the ₱{{ p.amount }} payment of {{ p.paid_at|date:'M d, Y' }}?" hx-swap="none">
+              <i class="bi bi-arrow-counterclockwise"></i> Undo
+            </button>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-light" data-bs-dismiss="modal">{% if form %}Cancel{% else %}Close{% endif %}</button>
+    {% if form %}
+      <button type="submit" class="btn btn-success">
+        <span class="htmx-indicator spinner-border spinner-border-sm"></span> <i class="bi bi-cash-coin"></i> Record payment
+      </button>
+    {% endif %}
+  </div>
+</form>

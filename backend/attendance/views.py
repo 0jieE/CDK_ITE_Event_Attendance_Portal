@@ -231,8 +231,17 @@ def attendance_report(request):
 @api_view(["GET"])
 @permission_classes([IsAdmin])
 def financial_report(request):
-    """Fines summary per event. Add ``?format=csv`` to download CSV."""
-    rows = services.financial_report(**_parse_report_query(request))
+    """Fines summary per event plus the department contributions of the semester.
+
+    ``?format=csv`` downloads the fines CSV; ``?format=csv&part=contributions`` the contributions CSV.
+    """
+    from . import contributions
+
+    query = _parse_report_query(request)
+    contrib_rows = contributions.report(semester=query["semester"])
+    if request.query_params.get("format") == "csv" and request.query_params.get("part") == "contributions":
+        return _csv_response(contrib_rows, "contributions_report.csv")
+    rows = services.financial_report(**query)
     if request.query_params.get("format") == "csv":
         return _csv_response(rows, "financial_report.csv")
-    return Response({"results": rows})
+    return Response({"results": rows, "contributions": contrib_rows})

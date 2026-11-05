@@ -10,10 +10,12 @@ Two deliberate corrections vs. the original ERD are encoded here:
 """
 
 import secrets
+from decimal import Decimal
 from io import BytesIO
 
 import qrcode
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.core.files.base import ContentFile
 from django.db import models, transaction
 from django.db.models.signals import post_delete
@@ -40,12 +42,15 @@ def default_required_types():
     ]
 
 
-def _records_block_reason(logs, fines, noun):
-    """Deleting cascades to attendance and fines, so records that exist block the delete."""
+def _records_block_reason(logs, fines, noun, contribution_payments=None):
+    """Deleting cascades to attendance, fines and contributions, so records that exist block the delete."""
     if logs.exists():
         return f"This {noun} already has attendance records, so it cannot be deleted (you can still edit it)."
     if fines.filter(amount_paid__gt=0).exists():
         return f"This {noun} already has fine payments recorded, so it cannot be deleted (you can still edit it)."
+    if contribution_payments is not None and contribution_payments.exists():
+        return (f"This {noun} already has contribution payments recorded, so it cannot be deleted "
+                f"(you can still edit it).")
     return None
 
 
@@ -69,8 +74,11 @@ class SchoolYear(models.Model):
     @property
     def delete_block_reason(self):
         """Why this school year must not be deleted (``None`` = it may be)."""
-        return _records_block_reason(AttendanceLog.objects.filter(event__semester__school_year=self),
-                                     Fine.objects.filter(event__semester__school_year=self), "school year")
+        return _records_block_reason(
+            AttendanceLog.objects.filter(event__semester__school_year=self),
+            Fine.objects.filter(event__semester__school_year=self), "school year",
+            ContributionPayment.objects.filter(contribution__semester__school_year=self),
+        )
 
 
 class Semester(models.Model):
@@ -130,8 +138,11 @@ class Semester(models.Model):
     @property
     def delete_block_reason(self):
         """Why this semester must not be deleted (``None`` = it may be)."""
-        return _records_block_reason(AttendanceLog.objects.filter(event__semester=self),
-                                     Fine.objects.filter(event__semester=self), "semester")
+        return _records_block_reason(
+            AttendanceLog.objects.filter(event__semester=self),
+            Fine.objects.filter(event__semester=self), "semester",
+            ContributionPayment.objects.filter(contribution__semester=self),
+        )
 
 
 class Event(models.Model):
@@ -481,6 +492,98 @@ class FineSlotPayment(models.Model):
 
     def __str__(self):
         return f"{self.fine_id} {self.date} {self.attendance_type}: {self.amount}"
+
+
+class Contribution(models.Model):
+    """A department contribution every student owes once per semester (e.g. "Department fee").
+
+    Several named contributions may exist per semester. Each student owes ``amount`` unless
+    exempted (:class:`ContributionExemption`); cash is recorded as one or more
+    :class:`ContributionPayment` rows (partial payments are allowed). Like fines, this is a
+    ledger only - there is no payment gateway.
+    """
+
+    semester = models.ForeignKey(Semester, on_delete=models.CASCADE, related_name="contributions")
+    name = models.CharField(max_length=120)
+    amount = models.DecimalField(
+        max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))],
+        help_text="What each student owes.",
+    )
+    due_date = models.DateField(blank=True, null=True)
+    description = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-semester__school_year__sy", "semester__name", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["semester", "name"], name="uniq_contribution_name"),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.semester})"
+
+    @property
+    def delete_block_reason(self):
+        """Payments would be lost with it, so they block the delete."""
+        if self.payments.exists():
+            return "This contribution already has payments recorded, so it cannot be deleted (you can still edit it)."
+        return None
+
+    def highest_paid(self):
+        """The most any single student has paid so far (the amount may not drop below it)."""
+        from django.db.models import Max, Sum
+
+        totals = self.payments.values("student").annotate(total=Sum("amount"))
+        return Decimal(totals.aggregate(top=Max("total"))["top"] or 0).quantize(Decimal("0.01"))
+
+
+class ContributionExemption(models.Model):
+    """A student who does not owe a contribution (e.g. a scholar or a shiftee)."""
+
+    contribution = models.ForeignKey(Contribution, on_delete=models.CASCADE, related_name="exemptions")
+    student = models.ForeignKey("accounts.Student", on_delete=models.CASCADE,
+                                related_name="contribution_exemptions")
+    reason = models.CharField(max_length=255, blank=True)
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="recorded_exemptions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["contribution", "student"]
+        constraints = [
+            models.UniqueConstraint(fields=["contribution", "student"], name="uniq_contribution_exemption"),
+        ]
+
+    def __str__(self):
+        return f"{self.student_id} exempt from {self.contribution_id}"
+
+
+class ContributionPayment(models.Model):
+    """Cash a student handed over for a contribution (one row per payment; partial payments add up)."""
+
+    contribution = models.ForeignKey(Contribution, on_delete=models.CASCADE, related_name="payments")
+    student = models.ForeignKey("accounts.Student", on_delete=models.CASCADE,
+                                related_name="contribution_payments")
+    amount = models.DecimalField(max_digits=10, decimal_places=2,
+                                 validators=[MinValueValidator(Decimal("0.01"))])
+    # when the cash was taken (a payment recorded offline keeps the time it really happened)
+    paid_at = models.DateTimeField(default=timezone.now)
+    note = models.CharField(max_length=255, blank=True)
+    recorded_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, blank=True, null=True,
+        related_name="recorded_contribution_payments",
+    )
+    # one id per payment form, so a double click / re-sent request is not recorded twice
+    ref = models.CharField(max_length=40, blank=True, null=True, unique=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-paid_at", "-id"]
+
+    def __str__(self):
+        return f"{self.student_id} paid {self.amount} for {self.contribution_id}"
 
 
 @receiver(post_delete, sender=QRCode)

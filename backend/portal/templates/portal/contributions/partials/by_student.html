@@ -1,0 +1,92 @@
+{% comment %}
+By Student: every contribution of the chosen semester with this student's standing and payments
+(print it to hand to the student).
+{% endcomment %}
+{% if not student_obj %}
+  <div class="text-center text-muted py-5 no-print">
+    <i class="bi bi-person-lines-fill fs-1 d-block mb-2"></i>
+    Search and select a <strong>student</strong> to see their contributions, record payments or print a statement.
+  </div>
+{% else %}
+  <div class="d-flex align-items-center gap-3 mb-3 no-print">
+    {% include "portal/partials/avatar.html" with u=student_obj.user size=56 %}
+    <div>
+      <h5 class="mb-0">{{ student_obj.student_number }} — {{ student_obj.user.get_full_name|default:student_obj.user.username }}</h5>
+      <div class="text-muted small">{% if student_obj.year_section %}{{ student_obj.year_section }} · {% endif %}{% if semester %}{{ semester }}{% else %}All semesters{% endif %}</div>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr><th>Contribution</th>{% if not filters.semester %}<th>Semester</th>{% endif %}<th>Due</th>
+            <th class="text-end">Owed</th><th class="text-end">Paid</th><th class="text-end">Balance</th>
+            <th>Status</th><th class="text-end no-print">Action</th></tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td>
+              <span class="fw-semibold">{{ r.contribution.name }}</span>
+              {% for p in r.payments %}
+                <div class="small text-muted">
+                  ₱{{ p.amount }} on {{ p.paid_at|date:"M d, Y g:i A" }}{% if p.note %} · {{ p.note }}{% endif %}{% if p.recorded_by %} · by {{ p.recorded_by }}{% endif %}
+                  <button class="btn btn-sm btn-link text-danger p-0 ms-1 align-baseline no-print" title="Undo this payment"
+                          hx-post="{% url 'portal:contributions-payment-undo' p.id %}"
+                          hx-confirm="Undo the ₱{{ p.amount }} payment of {{ p.paid_at|date:'M d, Y' }}?" hx-swap="none">
+                    <i class="bi bi-x-circle"></i>
+                  </button>
+                </div>
+              {% endfor %}
+              {% if r.exemption %}<div class="small text-muted">Exempt{% if r.exemption.reason %}: {{ r.exemption.reason }}{% endif %}</div>{% endif %}
+            </td>
+            {% if not filters.semester %}<td>{{ r.contribution.semester }}</td>{% endif %}
+            <td class="text-nowrap">{{ r.contribution.due_date|date:"M d, Y"|default:"—" }}</td>
+            <td class="text-end">₱{{ r.owed }}</td>
+            <td class="text-end">₱{{ r.paid }}</td>
+            <td class="text-end">₱{{ r.balance }}</td>
+            <td>{% include "portal/contributions/partials/status_badge.html" with status=r.status %}</td>
+            <td class="text-end text-nowrap no-print">
+              {% if r.status == 'EXEMPT' %}
+                <button class="btn btn-sm btn-outline-secondary"
+                        hx-post="{% url 'portal:contributions-unexempt' r.contribution.id %}" hx-vals='{"student": "{{ student_obj.id }}"}'
+                        hx-confirm="Remove the exemption? The student will owe ₱{{ r.contribution.amount }} again."
+                        hx-swap="none">
+                  <i class="bi bi-arrow-counterclockwise"></i> Unexempt
+                </button>
+              {% else %}
+                {% if r.balance %}
+                  <button class="btn btn-sm btn-success"
+                          hx-get="{% url 'portal:contributions-pay' r.contribution.id %}?student={{ student_obj.id }}"
+                          hx-target="#modalContent" hx-swap="innerHTML">
+                    <i class="bi bi-cash-coin"></i> Pay
+                  </button>
+                {% endif %}
+                {% if not r.paid %}
+                  <button class="btn btn-sm btn-outline-secondary"
+                          hx-post="{% url 'portal:contributions-exempt' r.contribution.id %}" hx-vals='{"student": "{{ student_obj.id }}"}'
+                          hx-prompt="Exempt this student from {{ r.contribution.name }}? Reason (optional):"
+                          hx-swap="none">
+                    Exempt
+                  </button>
+                {% endif %}
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8" class="text-center text-muted py-4">No contributions{% if semester %} in {{ semester }}{% endif %}.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if rows %}
+        <tfoot>
+          <tr class="fw-bold">
+            <td colspan="{% if filters.semester %}2{% else %}3{% endif %}" class="text-end">Total</td>
+            <td class="text-end">₱{{ totals.owed }}</td>
+            <td class="text-end">₱{{ totals.paid }}</td>
+            <td class="text-end">₱{{ totals.balance }}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      {% endif %}
+    </table>
+  </div>
+{% endif %}
