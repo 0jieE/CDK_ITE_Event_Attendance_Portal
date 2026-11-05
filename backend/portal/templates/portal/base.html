@@ -395,6 +395,69 @@
     document.addEventListener('DOMContentLoaded', function () { syncScanWindows(document); });
 
     // ---------------------------------------------------------------------
+    // Event form: start date suggests today (never earlier); AM scan windows
+    // take AM times and PM windows PM times (a time typed in the wrong half is
+    // moved to the right one), and an empty window suggests its default.
+    // ---------------------------------------------------------------------
+    function pad2(n) { return (n < 10 ? '0' : '') + n; }
+    function localISO(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+    function fixPeriod(input) {
+      var v = input.value, period = input.getAttribute('data-period');
+      if (!v || !period) return;
+      var parts = v.split(':'), t = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+      if (isNaN(t)) return;
+      if (period === 'AM' && t > 720) t = t < 780 ? 720 : t - 720;     // 12:xx PM -> noon, 1-11 PM -> AM
+      if (period === 'PM' && t < 720) t += 720;                          // 12-11 AM -> PM
+      var fixed = pad2(Math.floor(t / 60)) + ':' + pad2(t % 60);
+      if (fixed !== v.slice(0, 5)) input.value = fixed;
+    }
+    function syncEventForm(scope) {
+      var root = scope && scope.querySelectorAll ? scope : document;
+      var forms = root.matches && root.matches('form') ? [root] : Array.prototype.slice.call(root.querySelectorAll('form'));
+      forms.forEach(function (form) {
+        var start = form.querySelector('input[name="start_date"]');
+        var end = form.querySelector('input[name="end_date"]');
+        if (start && end && start.getAttribute('data-suggest-today')) {
+          var today = localISO(new Date());
+          start.min = today;
+          if (!start.value || start.value < today) start.value = today;
+        }
+        if (start && end) {
+          end.min = start.value || '';
+          if (start.value && end.value && end.value < start.value) end.value = start.value;
+        }
+        form.querySelectorAll('input[data-period]').forEach(function (inp) {
+          var label = form.querySelector('label[for="' + inp.id + '"]');
+          if (label && !label.querySelector('.period-tag')) {
+            var tag = document.createElement('span');
+            tag.className = 'period-tag badge text-bg-light border ms-1';
+            tag.textContent = inp.getAttribute('data-period');
+            label.appendChild(tag);
+          }
+        });
+      });
+    }
+    document.addEventListener('focusin', function (e) {
+      var inp = e.target;
+      if (inp && inp.matches && inp.matches('input[data-period]') && !inp.value && inp.getAttribute('data-default')) {
+        inp.value = inp.getAttribute('data-default');
+      }
+    });
+    document.addEventListener('keydown', function (e) {
+      var inp = e.target;
+      if (!inp || !inp.matches || !inp.matches('input[data-period]')) return;
+      var k = (e.key || '').toLowerCase();
+      if ((inp.getAttribute('data-period') === 'AM' && k === 'p') || (inp.getAttribute('data-period') === 'PM' && k === 'a')) e.preventDefault();
+    });
+    document.addEventListener('change', function (e) {
+      var inp = e.target;
+      if (!inp || !inp.matches) return;
+      if (inp.matches('input[data-period]')) fixPeriod(inp);
+      if (inp.name === 'start_date' || inp.name === 'end_date') syncEventForm(inp.form || document);
+    });
+    document.addEventListener('DOMContentLoaded', function () { syncEventForm(document); });
+
+    // ---------------------------------------------------------------------
     // Event form: one optional fine input per day when the event spans days.
     // Inputs are named day_fine__YYYY-MM-DD; blank = use the default rate.
     // ---------------------------------------------------------------------
@@ -508,6 +571,7 @@
       }
       initDataTables(e.detail.target);
       syncScanWindows(e.detail.target);
+      syncEventForm(e.detail.target);
       syncDayFines(e.detail.target);
       // a swap may replace the target itself (outerHTML), so look at the whole document
       initDataTables(document);

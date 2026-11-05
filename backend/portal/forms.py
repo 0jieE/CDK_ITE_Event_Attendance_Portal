@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 
 from django import forms
 from django.db import transaction
+from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 
@@ -57,6 +58,14 @@ class EventForm(BootstrapModelForm):
         "pm_in_start", "pm_in_end",
         "pm_out_start", "pm_out_end",
     ]
+
+    #: suggested scan window per field (24h): AM-In 6:00-7:30, AM-Out 11:00-12:00, PM-In 12:30-1:00, PM-Out 4:00-5:00
+    DEFAULT_WINDOWS = {
+        "am_in_start": datetime.time(6, 0), "am_in_end": datetime.time(7, 30),
+        "am_out_start": datetime.time(11, 0), "am_out_end": datetime.time(12, 0),
+        "pm_in_start": datetime.time(12, 30), "pm_in_end": datetime.time(13, 0),
+        "pm_out_start": datetime.time(16, 0), "pm_out_end": datetime.time(17, 0),
+    }
 
     class Meta:
         model = Event
@@ -107,6 +116,8 @@ class EventForm(BootstrapModelForm):
             current = Semester.current()          # new events default to the active semester
             if current is not None:
                 self.fields["semester"].initial = current.pk
+        self._setup_dates()
+        self._setup_windows()
         self.fields["fine_rate"].label = "Fine per missed slot"
         self.fields["fine_rate"].help_text = (
             "Default amount charged per missed slot. For a multi-day event you can set a "
@@ -116,6 +127,46 @@ class EventForm(BootstrapModelForm):
             "Set the scan window for each required slot. Scanning is only allowed "
             "inside these times; outside them the slot is marked absent."
         )
+
+    # -- start date: suggest today, never earlier ---------------------------------
+    def _setup_dates(self):
+        today = timezone.localdate()
+        creating = not (self.instance and self.instance.pk)
+        start_attrs = self.fields["start_date"].widget.attrs
+        if creating:
+            start_attrs["min"] = today.isoformat()
+            start_attrs["data-suggest-today"] = "1"          # the page script refreshes this from the device date
+            if not self.is_bound:
+                self.fields["start_date"].initial = today
+                self.fields["end_date"].initial = today
+        else:
+            # an event that already started may keep its date, but cannot be moved further back
+            start_attrs["min"] = min(today, self.instance.start_date).isoformat()
+
+    def clean_start_date(self):
+        start = self.cleaned_data.get("start_date")
+        if start is None:
+            return start
+        creating = not (self.instance and self.instance.pk)
+        if start < timezone.localdate() and (creating or start != self.instance.start_date):
+            raise forms.ValidationError("The start date cannot be in the past.")
+        return start
+
+    # -- scan windows: AM slots take AM times, PM slots PM times, with suggested defaults ----
+    def _setup_windows(self):
+        creating = not (self.instance and self.instance.pk)
+        for name in self.TIME_FIELDS:
+            period = "AM" if name.startswith("am_") else "PM"
+            attrs = self.fields[name].widget.attrs
+            attrs["data-period"] = period
+            attrs["data-default"] = self.DEFAULT_WINDOWS[name].strftime("%H:%M")
+            # AM windows run up to noon, PM windows from noon (native validation hint)
+            if period == "AM":
+                attrs["max"] = "12:00"
+            else:
+                attrs["min"] = "12:00"
+            if creating and not self.is_bound:
+                self.fields[name].initial = self.DEFAULT_WINDOWS[name]
 
     # -- per-day fines (inputs named ``day_fine__YYYY-MM-DD``, built by JS) -------
     DAY_FINE_PREFIX = "day_fine__"

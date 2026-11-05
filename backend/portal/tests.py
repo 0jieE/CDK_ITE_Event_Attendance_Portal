@@ -211,8 +211,9 @@ class ScanWindowVisibilityTests(TestCase):
         self.sem = Semester.objects.create(school_year=sy, name="1st")
 
     def post(self, **over):
-        data = {"name": "Windows test", "semester": self.sem.pk, "start_date": "2026-11-02",
-                "end_date": "2026-11-03", "fine_rate": "10", "is_active": "on"}
+        today = timezone.localdate()
+        data = {"name": "Windows test", "semester": self.sem.pk, "start_date": today.isoformat(),
+                "end_date": (today + datetime.timedelta(days=1)).isoformat(), "fine_rate": "10", "is_active": "on"}
         data.update(over)
         return self.client.post(reverse("portal:events-add"), data)
 
