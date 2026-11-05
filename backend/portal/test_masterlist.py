@@ -309,7 +309,7 @@ class LogsAndNavTests(TestCase):
 
         nav = {i["label"]: i for i in sidebar_nav(None)["nav_items"]}
         self.assertEqual([c["label"] for c in nav["Reports"]["children"]],
-                         ["Attendance Report", "Attendance Logs", "Financial Report", "Fines"])
+                         ["Attendance Report", "Attendance Logs", "Financial Report", "Fines", "Contributions"])
         self.assertEqual([c["label"] for c in nav["Settings"]["children"]],
                          ["Appearance", "School Years & Semesters"])
         self.assertNotIn("School Years", nav)
