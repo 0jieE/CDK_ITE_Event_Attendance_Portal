@@ -127,3 +127,65 @@ class ScanWindowDefaultsTests(EventFormTestBase):
         html = self.client.get(reverse("portal:events-list")).content.decode()
         for marker in ("function syncEventForm", "function slotTimeSync", "function slotTimeLoad", "data-suggest-today"):
             self.assertIn(marker, html)
+
+
+FOUR = {
+    "required_types": ["AM_IN", "AM_OUT", "PM_IN", "PM_OUT"],
+    "am_in_start": "06:00", "am_in_end": "07:30", "am_out_start": "11:00", "am_out_end": "12:00",
+    "pm_in_start": "12:30", "pm_in_end": "13:00", "pm_out_start": "16:00", "pm_out_end": "17:00",
+}
+
+
+class ScanWindowRulesTests(EventFormTestBase):
+    """AM slots in the morning, PM slots in the afternoon, and the windows in order without overlapping."""
+
+    def post4(self, **over):
+        data = dict(FOUR)
+        data.update(over)
+        return self.post(**data)
+
+    def text(self, res):
+        return re.sub(r"\s+", " ", res.content.decode())
+
+    def test_the_suggested_day_is_valid(self):
+        self.assertEqual(self.post4().status_code, 204)
+        ev = Event.objects.get(name="Form test")
+        self.assertEqual((str(ev.am_out_end), str(ev.pm_out_end)), ("12:00:00", "17:00:00"))
+
+    def test_am_slots_end_by_noon(self):
+        res = self.post4(am_out_end="12:15")
+        self.assertEqual(res.status_code, 422)
+        self.assertIn("AM Time-Out must be in the morning (AM, up to 12 noon).", self.text(res))
+
+    def test_pm_slots_are_in_the_afternoon(self):
+        res = self.post(required_types=["PM_OUT"], am_in_start="", am_in_end="",
+                        pm_out_start="10:00", pm_out_end="17:00")
+        self.assertEqual(res.status_code, 422)
+        self.assertIn("PM Time-Out must be in the afternoon (PM).", self.text(res))
+
+    def test_windows_may_not_overlap(self):
+        res = self.post4(am_out_start="07:00")                               # starts before AM-In ends (7:30)
+        self.assertEqual(res.status_code, 422)
+        self.assertIn("AM Time-Out must start after AM Time-In ends (7:30 AM).", self.text(res))
+        self.assertFalse(Event.objects.filter(name="Form test").exists())
+
+    def test_a_window_may_not_start_exactly_when_the_previous_ends(self):
+        res = self.post4(pm_in_start="12:00")                                # AM-Out ends at 12:00
+        self.assertEqual(res.status_code, 422)
+        self.assertIn("PM Time-In must start after AM Time-Out ends (12:00 PM).", self.text(res))
+
+    def test_windows_must_follow_the_order_of_the_day(self):
+        res = self.post4(pm_out_start="12:40", pm_out_end="12:50")           # PM-Out inside PM-In (12:30-1:00)
+        self.assertEqual(res.status_code, 422)
+        self.assertIn("PM Time-Out must start after PM Time-In ends (1:00 PM).", self.text(res))
+
+    def test_only_the_required_slots_are_compared(self):
+        # AM-Out is not required, so its (overlapping) times are ignored and PM-In follows AM-In.
+        res = self.post(required_types=["AM_IN", "PM_IN"], am_in_start="06:00", am_in_end="07:30",
+                        am_out_start="07:00", am_out_end="07:10", pm_in_start="12:30", pm_in_end="13:00")
+        self.assertEqual(res.status_code, 204, res.content[:400])
+
+    def test_the_page_script_checks_the_rules_live(self):
+        html = self.client.get(reverse("portal:events-list")).content.decode()
+        self.assertIn("function checkWindows", html)
+        self.assertIn("must start after", html)

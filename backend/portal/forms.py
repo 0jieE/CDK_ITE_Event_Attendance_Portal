@@ -275,7 +275,44 @@ class EventForm(BootstrapModelForm):
             if slot not in required:
                 cleaned[start_field] = None
                 cleaned[end_field] = None
+        self._check_windows(cleaned, required)
         return cleaned
+
+    def _check_windows(self, cleaned, required):
+        """Scan-window rules for the required slots (end after start is checked by ``Event.clean``):
+
+        * AM slots lie in the morning (up to 12 noon) and PM slots in the afternoon - the same
+          halves the pickers offer;
+        * the windows follow the day - AM-In, AM-Out, PM-In, PM-Out - and never overlap: each one
+          starts after the previous required window ends. (A scan is filed under the first window
+          that contains its time, so an overlap would make part of the later window unreachable.)
+        """
+        labels = dict(AttendanceType.choices)
+        noon = datetime.time(12, 0)
+        for slot, (start_field, end_field) in Event.SLOT_TIME_FIELDS.items():
+            if slot not in required:
+                continue
+            morning = slot.startswith("AM")
+            for name in (start_field, end_field):
+                value = cleaned.get(name)
+                if value is None:
+                    continue
+                if morning and value > noon:
+                    self.add_error(name, f"{labels[slot]} must be in the morning (AM, up to 12 noon).")
+                elif not morning and value < noon:
+                    self.add_error(name, f"{labels[slot]} must be in the afternoon (PM).")
+        previous = None
+        for slot in AttendanceType.values:                       # the order of the day
+            if slot not in required:
+                continue
+            start_field, end_field = Event.SLOT_TIME_FIELDS[slot]
+            start, end = cleaned.get(start_field), cleaned.get(end_field)
+            if start is None or end is None or end <= start:
+                continue
+            if previous and start <= previous[1]:
+                self.add_error(start_field, f"{labels[slot]} must start after {labels[previous[0]]} ends "
+                                            f"({previous[1].strftime('%I:%M %p').lstrip('0')}).")
+            previous = (slot, end)
 
     def save(self, commit=True):
         before = None

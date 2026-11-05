@@ -431,6 +431,34 @@
       hs.value = String(h); ms.value = String(min);
       slotTimeSync(box);
     }
+    // live check of the scan-window rules (the server enforces the same ones):
+    // end after start, and each required window starts after the previous one ends
+    function hhmm(v) { var m = /^(\d{1,2}):(\d{2})/.exec(v || ''); return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null; }
+    function label12(mins) { var h = Math.floor(mins / 60); return (h % 12 || 12) + ':' + pad2(mins % 60) + ' ' + (h < 12 ? 'AM' : 'PM'); }
+    function windowHint(inp, msg) {
+      var wrap = inp.closest('.slot-window');
+      if (!wrap) return;
+      var h = wrap.querySelector('.window-hint');
+      if (!h) { h = document.createElement('div'); h.className = 'window-hint text-danger small mt-1'; wrap.appendChild(h); }
+      h.textContent = msg; h.hidden = !msg;
+    }
+    function checkWindows(form) {
+      var names = { am_in: 'AM Time-In', am_out: 'AM Time-Out', pm_in: 'PM Time-In', pm_out: 'PM Time-Out' }, prev = null;
+      ['am_in', 'am_out', 'pm_in', 'pm_out'].forEach(function (key) {
+        var s = form.querySelector('input[name="' + key + '_start"]'), e = form.querySelector('input[name="' + key + '_end"]');
+        if (!s || !e) return;
+        var sMsg = '', eMsg = '', a = hhmm(s.value), b = hhmm(e.value);
+        if (!s.disabled && a && b) {
+          var am = a[0] * 60 + a[1], bm = b[0] * 60 + b[1];
+          if (bm <= am) eMsg = 'The end must be after the start.';
+          else {
+            if (prev && am <= prev.end) sMsg = names[key] + ' must start after ' + prev.name + ' ends (' + label12(prev.end) + ').';
+            prev = { name: names[key], end: bm };
+          }
+        }
+        windowHint(s, sMsg); windowHint(e, eMsg);
+      });
+    }
     function syncEventForm(scope) {
       var root = scope && scope.querySelectorAll ? scope : document;
       var forms = root.matches && root.matches('form') ? [root] : Array.prototype.slice.call(root.querySelectorAll('form'));
@@ -449,6 +477,7 @@
         form.querySelectorAll('.slot-time').forEach(function (box) {
           if (!box.getAttribute('data-ready')) { box.setAttribute('data-ready', '1'); slotTimeLoad(box); }
         });
+        if (form.querySelector('input[name="am_in_start"]')) checkWindows(form);
       });
     }
     document.addEventListener('change', function (e) {
@@ -456,6 +485,7 @@
       if (!inp || !inp.matches) return;
       var box = inp.closest && inp.closest('.slot-time');
       if (box) slotTimeSync(box);
+      if (inp.form && (box || inp.name === 'required_types')) checkWindows(inp.form);
       if (inp.name === 'start_date' || inp.name === 'end_date') syncEventForm(inp.form || document);
     });
     document.addEventListener('DOMContentLoaded', function () { syncEventForm(document); });
