@@ -39,6 +39,7 @@ Future<void> prefetchForOffline(ApiService api, User user) async {
     quietly(api.studentAttendance),
     quietly(api.studentMissedSlots),
     quietly(api.studentFines),
+    quietly(api.studentContributions),
     quietly(api.studentBalance),
     quietly(api.studentProfile),
   ]);

@@ -8,6 +8,7 @@ import 'package:http_parser/http_parser.dart' show MediaType;
 
 import '../config/api_config.dart';
 import '../models/attendance_log.dart';
+import '../models/contribution.dart';
 import '../models/event.dart';
 import '../models/fine.dart';
 import '../models/missed_slot.dart';
@@ -319,6 +320,15 @@ class ApiService {
     final data = await _cachedAll('/student/missed-slots/', {'event': ?event});
     return data
         .map((e) => MissedSlot.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// The student's department contributions (all semesters, all pages),
+  /// newest semester first.
+  Future<List<Contribution>> studentContributions() async {
+    final data = await _cachedAll('/student/contributions/');
+    return data
+        .map((e) => Contribution.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 

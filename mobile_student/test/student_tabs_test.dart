@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:ite_students/models/fine.dart';
+import 'package:ite_students/screens/student/contributions_tab.dart';
 import 'package:ite_students/screens/student/fines_tab.dart';
 import 'package:ite_students/screens/student/history_tab.dart';
 import 'package:ite_students/screens/student/profile_tab.dart';
@@ -215,6 +217,103 @@ void main() {
     expect(find.text('Tue, Oct 20, 2026\nScan window 1:00 PM – 2:00 PM'),
         findsNWidgets(2));
     expect(find.text('Paid'), findsOneWidget);
+  });
+
+  testWidgets('Contributions: grouped by semester, drop down payments',
+      (tester) async {
+    bigScreen(tester);
+    Map<String, dynamic> contribution(int id, String name, int semester,
+            String semesterName, String status, String display,
+            {bool exempt = false,
+            String reason = '',
+            String paid = '0.00',
+            String balance = '150.00',
+            List<Map<String, dynamic>> payments = const []}) =>
+        {
+          'id': id,
+          'name': name,
+          'description': '',
+          'semester': semester,
+          'semester_name': semesterName,
+          'is_active_semester': semester == 2,
+          'amount': '150.00',
+          'due_date': '2026-12-15',
+          'owed': exempt ? '0.00' : '150.00',
+          'paid': paid,
+          'balance': exempt ? '0.00' : balance,
+          'status': status,
+          'status_display': display,
+          'exempt': exempt,
+          'exemption_reason': reason,
+          'payments': payments,
+        };
+    final client = MockClient((req) async {
+      final path = req.url.path;
+      if (path.endsWith('/student/balance/')) {
+        return json({
+          'total_fines': '20.00',
+          'total_paid': '0.00',
+          'outstanding': '20.00',
+          'contributions_total': '300.00',
+          'contributions_paid': '100.00',
+          'contributions_outstanding': '200.00',
+          'total_outstanding': '220.00',
+        });
+      }
+      if (path.endsWith('/student/contributions/')) {
+        return json({
+          'results': [
+            contribution(3, 'Department fee', 2, '2026-2027 1st', 'PARTIAL',
+                'Part-paid', paid: '100.00', balance: '50.00', payments: [
+              {
+                'id': 9,
+                'amount': '100.00',
+                'paid_at': '2026-11-06T09:15:00+08:00',
+                'note': 'OR 0001',
+              },
+            ]),
+            contribution(4, 'T-shirt', 2, '2026-2027 1st', 'EXEMPT', 'Exempt',
+                exempt: true, reason: 'Scholar'),
+            contribution(1, 'Old fee', 1, '2025-2026 2nd', 'UNPAID', 'Unpaid'),
+          ],
+        });
+      }
+      return json({'detail': 'nf'}, 404);
+    });
+    await tester.pumpWidget(
+      Provider<ApiService>.value(
+        value: ApiService(tokens: FakeTokens(), client: client),
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: const Scaffold(body: ContributionsTab()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Contributions outstanding'), findsOneWidget);
+    expect(find.text('₱200.00'), findsOneWidget);
+    expect(find.text('2026-2027 1st'), findsOneWidget);
+    expect(find.text('2025-2026 2nd'), findsOneWidget);
+    expect(find.text('Current'), findsOneWidget);
+    expect(find.text('Part-paid'), findsOneWidget);
+    expect(find.text('Exempt · Scholar'), findsOneWidget);
+
+    // Collapsed until tapped; then the payment history shows.
+    expect(find.text('OR 0001', findRichText: true), findsNothing);
+    await tester.tap(find.text('Department fee'));
+    await tester.pumpAndSettle();
+    expect(find.text('Payments (1)'), findsOneWidget);
+    expect(find.textContaining('OR 0001'), findsOneWidget);
+    expect(find.text('₱50.00'), findsNWidgets(2)); // trailing + Balance row
+  });
+
+  test('Balance: an older saved response without contributions still works',
+      () {
+    final old = Balance.fromJson(
+        {'total_fines': '20.00', 'total_paid': '0.00', 'outstanding': '20.00'});
+    expect(old.totalOutstanding, '20.00');
+    expect(old.contributionsOutstanding, '0.00');
   });
 
   group('Profile tab', () {

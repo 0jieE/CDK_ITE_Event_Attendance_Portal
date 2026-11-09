@@ -375,13 +375,15 @@ class BrandColors extends ThemeExtension<BrandColors> {
   });
 
   /// Soft pill colours for a status (PRESENT/ABSENT/PAID/UNPAID, plus amber
-  /// UPCOMING for events that haven't started).
+  /// UPCOMING for events that haven't started and PARTIAL for part-paid
+  /// contributions; EXEMPT stays neutral).
   ({Color bg, Color fg}) badge(String status) {
     switch (status) {
       case 'PRESENT':
       case 'PAID':
         return (bg: presentBg, fg: presentFg);
       case 'UPCOMING':
+      case 'PARTIAL':
         return (bg: warningBg, fg: warningFg);
       case 'ABSENT':
       case 'UNPAID':

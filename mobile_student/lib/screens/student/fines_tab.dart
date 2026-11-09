@@ -61,7 +61,7 @@ class FinesTab extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            BalanceCard(balance: data.balance, label: 'Outstanding'),
+            BalanceCard.fines(balance: data.balance),
             const SizedBox(height: 16),
             if (data.fines.isEmpty)
               const Padding(

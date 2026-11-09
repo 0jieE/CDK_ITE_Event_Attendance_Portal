@@ -4,9 +4,9 @@ import '../../widgets/logout_action.dart';
 import '../../update/update_ui.dart';
 import '../../widgets/offline_banner.dart';
 import 'dashboard_tab.dart';
-import 'fines_tab.dart';
 import 'generate_qr_tab.dart';
 import 'history_tab.dart';
+import 'payments_tab.dart';
 import 'profile_tab.dart';
 
 /// Student interface root: bottom navigation across the five sections.
@@ -20,12 +20,12 @@ class StudentHome extends StatefulWidget {
 class _StudentHomeState extends State<StudentHome> {
   int _index = 0;
 
-  static const _titles = ['Dashboard', 'Generate QR', 'History', 'Fines', 'Profile'];
+  static const _titles = ['Dashboard', 'Generate QR', 'History', 'Payments', 'Profile'];
   final _tabs = const [
     DashboardTab(),
     GenerateQrTab(),
     HistoryTab(),
-    FinesTab(),
+    PaymentsTab(),
     ProfileTab(),
   ];
 
@@ -71,7 +71,7 @@ class _StudentHomeState extends State<StudentHome> {
           NavigationDestination(
               icon: Icon(Icons.account_balance_wallet_outlined),
               selectedIcon: Icon(Icons.account_balance_wallet),
-              label: 'Fines'),
+              label: 'Payments'),
           NavigationDestination(
               icon: Icon(Icons.person_outline),
               selectedIcon: Icon(Icons.person),
