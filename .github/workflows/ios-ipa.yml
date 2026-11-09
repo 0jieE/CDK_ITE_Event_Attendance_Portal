@@ -1,0 +1,58 @@
+# Builds UNSIGNED iOS .ipa files for both apps on a GitHub macOS runner.
+# There is no Mac here, so signing happens afterwards on Windows: download the
+# artifact and install it with Sideloadly (or AltStore) using a free Apple ID.
+# Free-account installs expire after 7 days and must be re-signed.
+name: iOS IPA (unsigned)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile_student/**'
+      - 'mobile_instructor/**'
+      - '.github/workflows/ios-ipa.yml'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: mobile_student
+            name: ITE-Students
+          - app: mobile_instructor
+            name: ITE-Instructors
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.8 # same as the dev machine
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Build (no code signing)
+        run: >
+          flutter build ios --release --no-codesign
+          --dart-define=API_BASE_URL=https://cdk-ite-event-attendance.onrender.com
+
+      - name: Package .ipa
+        run: |
+          version=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry "${{ matrix.name }}-$version.ipa" Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-${{ env.VERSION }}-ios
+          path: ${{ matrix.app }}/${{ matrix.name }}-${{ env.VERSION }}.ipa
+          retention-days: 30
